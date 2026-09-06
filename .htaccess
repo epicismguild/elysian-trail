@@ -1,0 +1,20 @@
+# ============================================================
+# ELYSIAN TRAIL — Apache / Dreamhost settings
+# ============================================================
+
+# Serve the PHP front door first so sessions work.
+DirectoryIndex index.php index.html
+
+# Never hand out the config file, even if PHP is misconfigured.
+<FilesMatch "^elysian-config\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# No directory listings.
+Options -Indexes

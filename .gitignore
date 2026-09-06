@@ -1,0 +1,23 @@
+# The live access code. Copy elysian-config.example.php to this name and
+# set your own code. Never commit the real one.
+elysian-config.php
+
+# Any local notes or scratch copies of the code
+*.local
+secrets.txt
+
+# OS and editor cruft
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# Build and dependency directories (nothing here needs them, but just in case)
+node_modules/
+dist/
+.cache/
+elysian-trail-v2.zip

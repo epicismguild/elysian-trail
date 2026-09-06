@@ -1,0 +1,2735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elysian Trail — Card Table &amp; Roll Tray</title>
+<meta name="description" content="Epicism's Elysian Trail: draw Blessings, Ordeals, and Dilemmas, and roll physics dice on the felt.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="icon" href="https://www.epicism.com/wp-content/uploads/2026/06/cropped-favicon-32x32.png" sizes="32x32">
+<!--ELYSIAN-PASS-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+    "@dimforge/rapier3d-compat": "https://esm.sh/@dimforge/rapier3d-compat@0.14.0"
+  }
+}
+</script>
+<style>
+:root{
+  --felt-1:#0b3a24;
+  --felt-2:#062a19;
+  --felt-3:#01180e;
+  --gold:#d9b45b;
+  --gold-soft:#f0dca6;
+  --ivory:#f4efe2;
+  --acid:#23e37a;
+  --blessing:#1f9d55;
+  --ordeal:#c0392b;
+  --dilemma:#2f6fb5;
+  --cardh:clamp(140px, 24vh, 300px);
+  --cardw:calc(var(--cardh) * 0.7092);
+  --card-r:calc(var(--cardw) * 0.055);
+}
+*,*::before,*::after{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%}
+body{
+  font-family:"Crimson Pro",Georgia,"Times New Roman",serif;
+  color:var(--ivory); background:var(--felt-3); overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{cursor:pointer; background:none; border:none; color:inherit; font:inherit}
+img,canvas,svg{display:block}
+
+/* ---------- Felt table ---------- */
+.table{
+  position:fixed; inset:0; display:flex; flex-direction:column;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 4%, rgba(255,255,255,.07), transparent 60%),
+    radial-gradient(ellipse 150% 120% at 50% 45%, var(--felt-1) 0%, var(--felt-2) 55%, var(--felt-3) 100%);
+}
+.table::before{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+  opacity:.5; mix-blend-mode:overlay;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.045) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0,0,0,.05) 0 1px, transparent 1px 3px);
+}
+
+/* ---------- Header ---------- */
+header{
+  position:relative; z-index:6; display:flex; align-items:center; justify-content:space-between;
+  gap:16px; padding:10px clamp(14px,2vw,26px) 8px;
+  border-bottom:1px solid rgba(217,180,91,.18);
+  background:linear-gradient(180deg, rgba(0,0,0,.28), transparent);
+}
+.brand{display:flex; align-items:center; gap:12px; min-width:0}
+.crest{height:46px; width:auto; object-fit:contain;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.65)) drop-shadow(0 0 12px rgba(217,180,91,.18))}
+.kicker{font-family:"Cinzel",Georgia,serif; font-weight:500; font-size:.56rem; letter-spacing:.32em;
+  color:rgba(240,220,166,.6); text-transform:uppercase}
+h1{font-family:"Cinzel",Georgia,serif; font-weight:900; font-size:clamp(1rem,1.7vw,1.5rem);
+  letter-spacing:.14em; color:var(--gold-soft); line-height:1.15; text-shadow:0 2px 0 rgba(0,0,0,.5)}
+.tagline{font-style:italic; font-size:.76rem; color:rgba(244,239,226,.55)}
+.controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+.ctl{
+  font-family:"Cinzel",Georgia,serif; font-weight:700; font-size:.64rem; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--gold-soft);
+  background:linear-gradient(180deg, rgba(255,255,255,.1), rgba(0,0,0,.25));
+  border:1px solid rgba(217,180,91,.42); border-radius:9px; padding:8px 13px; transition:.16s ease;
+}
+.ctl:hover:not(:disabled){background:linear-gradient(180deg, rgba(217,180,91,.28), rgba(0,0,0,.2)); border-color:var(--gold)}
+.ctl:active:not(:disabled){transform:translateY(1px)}
+.ctl:disabled{opacity:.32; cursor:not-allowed}
+.icon-btn{width:34px; height:34px; display:grid; place-items:center; border-radius:9px;
+  border:1px solid rgba(217,180,91,.32); color:var(--gold-soft); background:rgba(0,0,0,.22)}
+.icon-btn:hover{border-color:var(--gold)}
+.icon-btn svg{width:17px; height:17px}
+.hint{font-size:.7rem; color:rgba(244,239,226,.4); letter-spacing:.03em}
+@media (max-width:1180px){.hint{display:none}}
+
+/* ---------- Top half: cards ---------- */
+.card-zone{
+  position:relative; z-index:4; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  gap:clamp(16px,3vw,52px); padding:14px clamp(14px,2vw,26px) 10px;
+}
+.zone-label{
+  position:relative; z-index:2;
+  font-family:"Cinzel",Georgia,serif; font-size:.55rem; font-weight:700; letter-spacing:.28em;
+  text-transform:uppercase; color:rgba(240,220,166,.5); text-align:center; margin-bottom:9px;
+}
+.decks{display:flex; align-items:flex-start; justify-content:center; gap:clamp(10px,1.8vw,30px)}
+.deck{display:flex; flex-direction:column; align-items:center; gap:7px}
+.stack{position:relative; height:var(--cardh); width:var(--cardw); cursor:pointer;
+  border-radius:var(--card-r); transition:transform .18s ease}
+.stack:hover{transform:translateY(-7px)}
+.stack:active{transform:translateY(-2px) scale(.99)}
+.stack img{position:absolute; inset:0; width:100%; height:100%; filter:drop-shadow(0 10px 15px rgba(0,0,0,.55))}
+.slot{position:absolute; inset:0; border-radius:inherit; border:1px dashed rgba(240,220,166,.26);
+  background:rgba(0,0,0,.18); box-shadow:inset 0 0 26px rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center; text-align:center; padding:8px}
+.slot span{font-family:"Cinzel",Georgia,serif; font-size:.55rem; letter-spacing:.18em;
+  color:rgba(240,220,166,.5); text-transform:uppercase; line-height:1.8}
+.stack.shuffling{animation:shuffle .62s ease}
+@keyframes shuffle{0%{transform:none}20%{transform:translateX(-9px) rotate(-3deg)}
+  45%{transform:translateX(9px) rotate(3deg)}70%{transform:translateX(-5px) rotate(-1.5deg)}100%{transform:none}}
+/* The card images are absolutely positioned, so their drop-shadows paint above
+   ordinary in-flow text. Lift the labels into their own stacking level. */
+.deck-meta{position:relative; z-index:2}
+.deck-name{font-family:"Cinzel",Georgia,serif; font-weight:700; font-size:.66rem; letter-spacing:.2em;
+  text-transform:uppercase; white-space:nowrap}
+.count{font-size:.66rem; letter-spacing:.08em; color:rgba(244,239,226,.5); font-variant-numeric:tabular-nums}
+.count b{color:var(--gold-soft); font-weight:600}
+.pip{display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; vertical-align:1px}
+.b .pip{background:var(--blessing); box-shadow:0 0 8px var(--blessing)}
+.o .pip{background:var(--ordeal); box-shadow:0 0 8px var(--ordeal)}
+.d .pip{background:var(--dilemma); box-shadow:0 0 8px var(--dilemma)}
+.b .deck-name{color:#8ee6b3}
+.o .deck-name{color:#f0a99f}
+.d .deck-name{color:#a8c9f2}
+
+.discard-zone{display:flex; flex-direction:column; align-items:center}
+.discard{position:relative; height:calc(var(--cardh) * 1.16); width:calc(var(--cardw) * 1.16)}
+.discard .slot{border-radius:calc(var(--card-r) * 1.16)}
+.discard img{position:absolute; inset:0; width:100%; height:100%;
+  filter:drop-shadow(0 14px 22px rgba(0,0,0,.6)); transform-origin:50% 60%}
+.discard img.top{cursor:zoom-in}
+.discard img.deal{animation:deal .42s cubic-bezier(.2,.8,.25,1)}
+@keyframes deal{from{opacity:0; transform:translate(-16%,-10%) rotateY(88deg) scale(.86)} to{opacity:1; transform:none}}
+/* Fixed height so the tray below never shifts when the first card lands. */
+.discard-caption{position:relative; z-index:2; margin-top:7px; height:34px; overflow:hidden; text-align:center;
+  font-size:.72rem; color:rgba(244,239,226,.6); line-height:1.5}
+.discard-caption b{font-family:"Cinzel",Georgia,serif; letter-spacing:.14em; font-size:.66rem;
+  text-transform:uppercase; color:var(--gold-soft)}
+
+/* ---------- Bottom half: dice tray ---------- */
+.dice-zone{
+  position:relative; z-index:3; flex:1 1 auto; min-height:0;
+  margin:0 clamp(14px,2vw,26px) clamp(14px,2vw,22px);
+  border-radius:18px; overflow:hidden;
+  border:1px solid rgba(217,180,91,.3);
+  box-shadow:0 -8px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.4);
+  background:radial-gradient(ellipse 90% 120% at 50% 30%, #0d2419, #061710 70%);
+}
+#scene-canvas{position:absolute; inset:0; width:100%; height:100%}
+
+.tray-tag{
+  position:absolute; top:10px; left:14px; z-index:2;
+  font-family:"Cinzel",Georgia,serif; font-size:.55rem; letter-spacing:.26em;
+  text-transform:uppercase; color:rgba(240,220,166,.45); pointer-events:none;
+}
+.tray-hint{color:rgba(240,220,166,.24)}
+.tray-hint::before{content:"\00b7"; margin:0 .5em 0 .35em}
+.result-hud{
+  position:absolute; top:8px; right:14px; z-index:2; text-align:right; pointer-events:none;
+  display:flex; flex-direction:column; align-items:flex-end; gap:1px;
+}
+/* Transparent window: the engine renders a second, close-in top-down camera into
+   exactly these pixels of the same canvas, so the frame must stay unpainted.
+   Sits under the tray tag on the left, opposite the result readout. The GL clip is
+   a hardware rectangle, so the frame is square-cornered to match it exactly. */
+.dice-cam{
+  position:absolute; top:34px; left:14px; z-index:2; pointer-events:none;
+  width:clamp(92px,11vw,150px); aspect-ratio:1 / 1; border-radius:0;
+  border:1px solid rgba(217,180,91,.34);
+  box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.35);
+}
+.dice-cam-label{
+  position:absolute; top:6px; left:0; right:0; text-align:center;
+  font-family:"Cinzel",Georgia,serif;
+  font-size:.46rem; letter-spacing:.22em; text-transform:uppercase;
+  color:rgba(240,220,166,.5); text-shadow:0 1px 3px rgba(0,0,0,.8);
+}
+.result-label{font-family:"Cinzel",Georgia,serif; font-size:.55rem; letter-spacing:.26em;
+  text-transform:uppercase; color:rgba(240,220,166,.55)}
+.result-value{
+  font-family:"Cinzel",Georgia,serif; font-weight:900; font-size:clamp(3.8rem,8vw,6rem); line-height:1;
+  color:#eafaf0; text-shadow:0 0 26px rgba(35,227,122,.45), 0 2px 0 rgba(0,0,0,.5);
+  font-variant-numeric:tabular-nums;
+}
+.result-value.pop{animation:pop .34s cubic-bezier(.2,1.4,.3,1)}
+/* While the dice are still moving the number is withheld entirely: a die can look
+   parked a beat before physics agrees, and a changing figure reads as a result. */
+.result-value.waiting{
+  font-size:clamp(2.4rem,5vw,3.6rem); letter-spacing:.12em; color:rgba(234,250,240,.42);
+  text-shadow:none; animation:waitPulse 1.05s ease-in-out infinite;
+}
+@keyframes waitPulse{0%,100%{opacity:.35} 50%{opacity:.85}}
+/* Short windows: keep the rail clear of the control dock. */
+@media (max-height:760px){ .dice-cam{width:clamp(76px,9vw,112px)} }
+@keyframes pop{from{transform:scale(.72); opacity:.4} to{transform:scale(1); opacity:1}}
+.result-breakdown{display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; margin-top:2px}
+.die-chip{
+  font-family:"Cinzel",Georgia,serif; font-size:.62rem; font-weight:700; letter-spacing:.05em;
+  padding:2px 7px; border-radius:6px; background:rgba(35,227,122,.14);
+  border:1px solid rgba(35,227,122,.4); color:#c9ffe0;
+}
+.status-line{font-size:.68rem; font-style:italic; color:rgba(244,239,226,.42)}
+
+.dock{
+  position:absolute; left:0; right:0; bottom:0; z-index:2;
+  /* Controls pinned left, roll log pinned right. Neither can move the other:
+     the log is fixed-width and never shrinks, so nothing overlaps. */
+  display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap;
+  gap:10px clamp(10px,1.4vw,18px); padding:9px clamp(14px,1.6vw,22px) 11px;
+  background:linear-gradient(180deg, rgba(3,17,10,0), rgba(3,17,10,.72) 42%, rgba(3,17,10,.9));
+  border-top:1px solid rgba(217,180,91,.14);
+}
+.dock-center{flex:0 1 auto; display:flex; align-items:center; justify-content:flex-start;
+  gap:clamp(8px,1.4vw,20px); flex-wrap:wrap}
+.dock-mirror{display:none}
+.die-select{display:flex; gap:5px; flex-wrap:wrap; justify-content:center}
+.die-btn{
+  display:flex; flex-direction:column; align-items:center; gap:2px; width:46px; padding:6px 2px 5px;
+  border-radius:9px; border:1px solid rgba(120,200,150,.2); background:rgba(8,26,18,.6);
+  color:#9fd8ba; transition:.15s ease;
+}
+.die-btn svg{width:19px; height:19px}
+.die-btn span{font-family:"Cinzel",Georgia,serif; font-size:.56rem; font-weight:700; letter-spacing:.06em}
+.die-btn:hover{border-color:rgba(35,227,122,.55); color:#d8ffe9; transform:translateY(-1px)}
+.die-btn.active{
+  border-color:var(--acid); color:#04140c; background:linear-gradient(180deg,#43f295,#18c065);
+  box-shadow:0 0 16px rgba(35,227,122,.4);
+}
+.qty-control{display:flex; align-items:center; gap:6px; padding:5px 9px; border-radius:9px;
+  border:1px solid rgba(120,200,150,.2); background:rgba(8,26,18,.6)}
+.qty-label{font-family:"Cinzel",Georgia,serif; font-size:.55rem; letter-spacing:.2em;
+  text-transform:uppercase; color:rgba(240,220,166,.6)}
+.qty-btn{width:24px; height:24px; display:grid; place-items:center; border-radius:6px;
+  border:1px solid rgba(120,200,150,.22); color:#c9ffe0}
+.qty-btn:hover{border-color:var(--acid)}
+.qty-btn svg{width:14px; height:14px}
+.qty-value{min-width:18px; text-align:center; font-family:"Crimson Pro",Georgia,serif; font-weight:600;
+  font-size:1rem; color:var(--gold-soft); font-variant-numeric:tabular-nums lining-nums}
+.roll-btn{
+  display:flex; align-items:center; gap:8px; padding:10px 22px; border-radius:11px;
+  font-family:"Cinzel",Georgia,serif; font-weight:700; font-size:.74rem; letter-spacing:.16em;
+  text-transform:uppercase; color:#04140c;
+  background:linear-gradient(180deg,#f2dfa6,#d9b45b); border:1px solid #f0dca6;
+  box-shadow:0 6px 18px rgba(0,0,0,.4); transition:.15s ease;
+}
+.roll-btn svg{width:16px; height:16px}
+.roll-btn:hover:not(:disabled){filter:brightness(1.08); transform:translateY(-1px)}
+.roll-btn:disabled{opacity:.55; cursor:progress}
+/* ---------- Roll log (its own fixed-size bay, right of the controls) ---------- */
+.history-row{
+  flex:0 0 auto; margin-left:auto;
+  display:flex; flex-direction:column; align-items:flex-start; gap:5px;
+  padding:6px 10px 8px; border-radius:10px;
+  border:1px solid rgba(217,180,91,.2); background:rgba(3,17,10,.5);
+}
+.history-label{font-family:"Cinzel",Georgia,serif; font-size:.54rem; letter-spacing:.2em;
+  text-transform:uppercase; color:rgba(240,220,166,.45); padding-left:1px}
+/* Fixed width: six 34px chips plus five 5px gaps. Never resizes. */
+.history-list{display:flex; align-items:center; gap:5px; width:229px; height:34px; overflow:hidden}
+.history-empty{font-size:.66rem; font-style:italic; color:rgba(244,239,226,.28)}
+.history-chip{position:relative; flex:0 0 auto; width:34px; height:34px; display:grid; place-items:center}
+.history-chip svg{width:34px; height:34px; display:block}
+.history-chip path{fill:rgba(217,180,91,.09); stroke:rgba(217,180,91,.45); stroke-width:1.3; stroke-linejoin:round}
+.history-chip text{fill:rgba(244,239,226,.72); font-family:"Crimson Pro",Georgia,serif; font-weight:700;
+  text-anchor:middle; font-variant-numeric:lining-nums}
+.history-chip.latest path{fill:rgba(35,227,122,.14); stroke:var(--acid); stroke-width:1.5}
+.history-chip.latest text{fill:#eafff2}
+.chip-count{position:absolute; right:-3px; bottom:-3px; font-family:"Cinzel",Georgia,serif;
+  font-size:.45rem; font-weight:700; letter-spacing:.02em; padding:1px 3px; border-radius:4px;
+  color:var(--gold-soft); background:rgba(3,17,10,.92); border:1px solid rgba(217,180,91,.35)}
+@media (max-width:1180px){.history-list{width:151px}}
+@media (max-width:980px){.history-list{width:73px}}
+@media (max-width:820px){.history-row{display:none}}
+
+#loading-overlay{
+  position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:12px; background:rgba(4,20,12,.86); color:var(--gold-soft);
+  transition:opacity .4s ease;
+}
+#loading-overlay.hidden{opacity:0; pointer-events:none}
+.loader-die{width:40px; height:40px; animation:spin 2.6s linear infinite; color:var(--acid)}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-text{font-family:"Cinzel",Georgia,serif; font-size:.6rem; letter-spacing:.24em; text-transform:uppercase}
+#debug-overlay{position:fixed; bottom:4px; left:6px; z-index:40; font-family:monospace; font-size:11px;
+  white-space:pre; color:#8ef; background:rgba(0,0,0,.5); padding:4px 6px; border-radius:4px}
+
+/* ---------- Toast + zoom ---------- */
+.toast{
+  position:fixed; left:50%; top:60px; transform:translate(-50%,-14px);
+  background:rgba(2,20,12,.95); border:1px solid rgba(217,180,91,.5); border-radius:11px;
+  padding:9px 20px; font-family:"Cinzel",Georgia,serif; font-size:.66rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--gold-soft); opacity:0; pointer-events:none;
+  transition:.3s ease; z-index:30; box-shadow:0 12px 30px rgba(0,0,0,.5);
+}
+.toast.show{opacity:1; transform:translate(-50%,0)}
+/* Card zoom. The overlay stays in the layout and is faded, so the card itself can
+   ease between the spot it was clicked and the full-screen view (a FLIP: the script
+   measures both rectangles and animates the transform between them). */
+.zoom{
+  position:fixed; inset:0; z-index:35; display:flex; align-items:center; justify-content:center;
+  padding:3vh; cursor:zoom-out;
+  background:rgba(1,12,7,0); backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px);
+  opacity:0; visibility:hidden;
+  transition:opacity .30s ease, background-color .34s ease, backdrop-filter .34s ease,
+             visibility 0s linear .56s;
+}
+.zoom.show{
+  opacity:1; visibility:visible;
+  background:rgba(1,12,7,.88); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  transition:opacity .26s ease, background-color .3s ease, backdrop-filter .3s ease,
+             visibility 0s linear 0s;
+}
+.zoom img{
+  max-height:94vh; max-width:92vw; filter:drop-shadow(0 24px 50px rgba(0,0,0,.7));
+  transform-origin:50% 50%; will-change:transform; backface-visibility:hidden;
+  transition:transform .56s cubic-bezier(.2,.85,.24,1);
+}
+/* Used for the one frame where the card is placed at the clicked rectangle. */
+.zoom img.snap{transition:none}
+@media (prefers-reduced-motion:reduce){
+  .zoom img{transition:none}
+}
+
+/* ---------- How to Play ---------- */
+.rules{position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
+  padding:3vh 3vw; background:rgba(1,12,7,.86); backdrop-filter:blur(5px)}
+.rules.show{display:flex}
+.rules-panel{position:relative; width:min(1020px,96vw); max-height:92vh; overflow-y:auto;
+  padding:26px clamp(18px,3vw,34px) 30px;
+  background:linear-gradient(180deg,#0a3220,#04170e 60%,#02100a);
+  border:1px solid rgba(217,180,91,.45); border-radius:16px;
+  box-shadow:0 30px 90px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06);
+  scrollbar-width:thin; scrollbar-color:rgba(217,180,91,.45) transparent}
+.rules-panel::-webkit-scrollbar{width:9px}
+.rules-panel::-webkit-scrollbar-thumb{background:rgba(217,180,91,.4); border-radius:9px}
+.rules-close{position:absolute; top:12px; right:14px; width:34px; height:34px; border-radius:9px;
+  display:grid; place-items:center; color:var(--gold-soft);
+  border:1px solid rgba(217,180,91,.35); background:rgba(0,0,0,.3); font-size:1.05rem; line-height:1}
+.rules-close:hover{border-color:var(--gold); background:rgba(217,180,91,.2)}
+.rules-head{text-align:center; padding:2px 44px 16px; border-bottom:1px solid rgba(217,180,91,.2); margin-bottom:20px}
+.rules-head h2{font-family:"Cinzel",Georgia,serif; font-weight:900; font-size:clamp(1.15rem,2vw,1.6rem);
+  letter-spacing:.14em; color:var(--gold-soft); text-transform:uppercase}
+.rules-head p{margin-top:5px; font-size:.85rem; color:rgba(244,239,226,.6); font-style:italic}
+.rules-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(258px,1fr)); gap:20px clamp(20px,3vw,34px);
+  align-items:start}
+.rules-grid > section{break-inside:avoid}
+.rules h3{font-family:"Cinzel",Georgia,serif; font-weight:700; font-size:.62rem; letter-spacing:.24em;
+  text-transform:uppercase; color:var(--gold); margin-bottom:8px;
+  padding-bottom:6px; border-bottom:1px solid rgba(217,180,91,.16)}
+.rules p{font-size:.88rem; line-height:1.55; color:rgba(244,239,226,.86); margin-bottom:7px}
+.rules p.aside{font-size:.8rem; color:rgba(244,239,226,.55); font-style:italic}
+.rules ol{margin:0 0 6px 1.1em; font-size:.88rem; line-height:1.6; color:rgba(244,239,226,.86)}
+.rules ol li{margin-bottom:1px}
+.legend{width:100%; border-collapse:collapse; font-size:.85rem; color:rgba(244,239,226,.86)}
+.legend td{padding:4px 0; border-bottom:1px solid rgba(255,255,255,.05); vertical-align:top}
+.legend tr:last-child td{border-bottom:none}
+.legend td:first-child{width:38%; padding-right:12px; color:var(--gold-soft); white-space:nowrap;
+  font-family:"Cinzel",Georgia,serif; font-size:.66rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; padding-top:6px}
+.legend.odds td:first-child{width:26%}
+.legend.odds td:nth-child(2){width:28%; color:var(--gold-soft); font-variant-numeric:tabular-nums}
+.sw{display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:7px; vertical-align:-1px;
+  border:1px solid rgba(0,0,0,.5); box-shadow:0 0 6px rgba(0,0,0,.4)}
+.rules-foot{margin-top:22px; padding-top:14px; border-top:1px solid rgba(217,180,91,.2);
+  text-align:center; font-size:.8rem; color:rgba(244,239,226,.5); font-style:italic}
+
+/* ---------- Cover page ---------- */
+.cover{
+  position:fixed; inset:0; z-index:90; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; text-align:center; padding:6vh 6vw;
+  /* Spotlight: bright pool of felt at the centre, deep shadow at the edges */
+  background:
+    radial-gradient(ellipse 58% 62% at 50% 46%, rgba(214,255,228,.10), rgba(0,0,0,0) 70%),
+    radial-gradient(ellipse 78% 88% at 50% 46%, #14442d 0%, #0d3423 26%, #072015 55%, #02100a 78%, #010704 100%);
+  transition:opacity .9s ease, visibility .9s ease;
+}
+.cover::before{   /* felt weave, same as the table */
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:
+    repeating-linear-gradient(48deg, rgba(255,255,255,.022) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(-42deg, rgba(0,0,0,.05) 0 2px, transparent 2px 4px);
+}
+.cover::after{    /* vignette to sink the corners further */
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(ellipse 70% 76% at 50% 46%, transparent 40%, rgba(0,0,0,.55) 82%, rgba(0,0,0,.82) 100%);
+}
+.cover.gone{opacity:0; visibility:hidden; pointer-events:none}
+.cover-inner{position:relative; z-index:1; display:flex; flex-direction:column; align-items:center;
+  max-width:min(1000px,94vw)}
+.cover-crest{height:74px; width:auto; margin-bottom:20px; opacity:.92;
+  filter:drop-shadow(0 6px 20px rgba(0,0,0,.6))}
+.cover-presents{font-family:"Crimson Pro",Georgia,serif; font-style:italic; font-weight:400;
+  font-size:clamp(.95rem,1.7vw,1.3rem); letter-spacing:.06em; color:rgba(240,220,166,.72)}
+.cover-title{font-family:"Cinzel",Georgia,serif; font-weight:900; line-height:1;
+  font-size:clamp(2.3rem,7.4vw,5.4rem); letter-spacing:.06em; margin:.14em 0 .18em;
+  color:var(--gold-soft);
+  text-shadow:0 2px 0 rgba(0,0,0,.5), 0 0 46px rgba(217,180,91,.3), 0 18px 50px rgba(0,0,0,.7)}
+.cover-sub{font-family:"Crimson Pro",Georgia,serif; font-style:italic;
+  font-size:clamp(.9rem,1.9vw,1.2rem); color:rgba(244,239,226,.68); letter-spacing:.02em}
+.cover-rule{width:min(340px,70vw); height:1px; margin:30px 0 26px;
+  background:linear-gradient(90deg, transparent, rgba(217,180,91,.55), transparent)}
+.cover-form{display:flex; flex-direction:column; align-items:center; gap:12px}
+.cover-prompt{font-family:"Cinzel",Georgia,serif; font-weight:700; font-size:.64rem;
+  letter-spacing:.3em; text-transform:uppercase; color:rgba(240,220,166,.6)}
+.cover-entry{display:flex; align-items:center; gap:9px; flex-wrap:wrap; justify-content:center}
+#cover-code{
+  width:min(300px,74vw); padding:12px 15px; border-radius:10px; text-align:center;
+  font-family:"Crimson Pro",Georgia,serif; font-size:1.05rem; letter-spacing:.1em;
+  color:#f4efe2; background:rgba(2,14,9,.72);
+  border:1px solid rgba(217,180,91,.4); box-shadow:inset 0 2px 10px rgba(0,0,0,.5);
+  transition:.18s ease;
+}
+#cover-code::placeholder{color:rgba(244,239,226,.25); letter-spacing:.06em; font-style:italic}
+#cover-code:focus{outline:none; border-color:var(--gold);
+  box-shadow:inset 0 2px 10px rgba(0,0,0,.5), 0 0 0 3px rgba(217,180,91,.16)}
+.cover-btn{
+  display:flex; align-items:center; gap:8px; padding:12px 24px; border-radius:10px;
+  font-family:"Cinzel",Georgia,serif; font-weight:700; font-size:.7rem; letter-spacing:.18em;
+  text-transform:uppercase; color:#04140c;
+  background:linear-gradient(180deg,#f2dfa6,#d9b45b); border:1px solid #f0dca6;
+  box-shadow:0 6px 18px rgba(0,0,0,.45); transition:.15s ease;
+}
+.cover-btn:hover:not(:disabled){filter:brightness(1.08); transform:translateY(-1px)}
+.cover-btn:disabled{opacity:.6; cursor:progress}
+.cover-note{min-height:20px; font-family:"Crimson Pro",Georgia,serif; font-style:italic;
+  font-size:.85rem; color:rgba(244,239,226,.45)}
+.cover-note.bad{color:#f0a99f}
+.cover-note.good{color:#8ee6b3}
+.cover-form.shake{animation:coverShake .42s ease}
+@keyframes coverShake{0%,100%{transform:none}20%{transform:translateX(-8px)}
+  45%{transform:translateX(8px)}70%{transform:translateX(-4px)}}
+/* ---------- Cover footer ---------- */
+.cover-foot{position:absolute; bottom:20px; left:0; right:0; z-index:2; text-align:center}
+.cover-foot-line{display:block; font-family:"Crimson Pro",Georgia,serif; font-style:italic;
+  font-size:.82rem; color:rgba(244,239,226,.4)}
+.cover-foot-links{display:inline-flex; align-items:center; gap:.85em; margin-top:9px;
+  font-family:"Cinzel",Georgia,serif; font-size:.52rem; font-weight:700;
+  letter-spacing:.2em; text-transform:uppercase}
+.cover-foot-links a{color:rgba(240,220,166,.55); text-decoration:none;
+  border-bottom:1px solid rgba(217,180,91,.22); padding-bottom:2px; transition:.18s ease}
+.cover-foot-links a:hover{color:var(--gold-soft); border-color:var(--gold)}
+.cover-foot-links .sep{color:rgba(217,180,91,.32)}
+@media (max-width:520px){
+  .cover-foot{bottom:14px}
+  .cover-foot-line{font-size:.74rem; padding:0 22px}
+}
+@media (max-width:520px){.cover-crest{height:56px; margin-bottom:14px}}
+
+/* ---------- Small screens ---------- */
+@media (max-width:900px){
+  body{overflow:auto}
+  .table{position:relative; min-height:100%}
+  header{flex-direction:column; align-items:flex-start; gap:8px}
+  .controls{justify-content:flex-start}
+  .card-zone{flex-wrap:wrap; gap:18px}
+  .dice-zone{min-height:460px}
+  :root{--cardh:clamp(120px, 21vh, 220px)}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER PAGE ===================== -->
+<div class="cover" id="cover">
+  <div class="cover-inner">
+    <img class="cover-crest" src="./assets/ico-simple.svg" alt="Epicism guild crest"
+         onerror="this.onerror=null; this.src='./assets/epicism-logo.png'">
+    <div class="cover-presents">Epicism Proudly Presents</div>
+    <h1 class="cover-title">Elysian Trail</h1>
+    <div class="cover-sub">A Race of Fate, Fortune, and Perfect Rolls.</div>
+    <div class="cover-rule"></div>
+    <form class="cover-form" id="cover-form" autocomplete="off">
+      <label class="cover-prompt" for="cover-code">Enter Code to Proceed</label>
+      <div class="cover-entry">
+        <input id="cover-code" name="code" type="password" inputmode="text" placeholder="&bull; &bull; &bull; &bull; &bull; &bull;"
+               autocomplete="off" spellcheck="false" aria-describedby="cover-note">
+        <button class="cover-btn" id="cover-go" type="submit">Proceed</button>
+      </div>
+      <div class="cover-note" id="cover-note" role="status" aria-live="polite"></div>
+    </form>
+  </div>
+  <div class="cover-foot">
+    <span class="cover-foot-line">Made by Epicism for the enjoyment of all.</span>
+    <span class="cover-foot-links">
+      <a href="https://ko-fi.com/epicismguild" target="_blank" rel="noopener">Support the Guild</a>
+      <span class="sep">&bull;</span>
+      <a href="https://github.com/epicismguild/elysian-trail" target="_blank" rel="noopener">Get the Files</a>
+    </span>
+  </div>
+</div>
+
+<div class="table">
+  <header>
+    <div class="brand">
+      <img class="crest" src="./assets/ico-simple.svg" alt="Epicism guild crest"
+           onerror="this.onerror=null; this.src='./assets/epicism-logo.png'">
+      <div>
+        <div class="kicker">Epicism Presents</div>
+        <h1>Elysian Trail</h1>
+        <div class="tagline">A Race of Fate, Fortune, and Perfect Rolls.</div>
+      </div>
+    </div>
+    <div class="controls">
+      <span class="hint">1 2 3 draw &middot; R roll &middot; U undo &middot; H rules</span>
+      <button class="ctl" id="rulesBtn">How to Play</button>
+      <button class="ctl" id="undoBtn" disabled>&#8630; Undo</button>
+      <button class="ctl" id="shuffleBtn">Shuffle All</button>
+      <button class="ctl" id="clearBtn">Clear Table</button>
+      <button class="icon-btn" id="sound-toggle" aria-label="Mute sound" aria-pressed="false" title="Toggle sound">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="sound-icon">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================== TOP HALF: DECKS ===================== -->
+  <section class="card-zone">
+    <div>
+      <div class="zone-label">The Decks</div>
+      <div class="decks" id="decks"></div>
+    </div>
+    <div class="discard-zone">
+      <div class="zone-label">Discard Pile</div>
+      <div class="discard" id="discard"></div>
+      <div class="discard-caption" id="caption"></div>
+    </div>
+  </section>
+
+  <!-- ===================== BOTTOM HALF: ROLL TRAY ===================== -->
+  <section class="dice-zone" id="dice-zone">
+    <canvas id="scene-canvas" aria-label="3D dice rolling tray"></canvas>
+    <div class="tray-tag">The Roll Tray<span class="tray-hint">Scroll to zoom</span></div>
+
+    <div class="result-hud" id="result-hud">
+      <span class="result-label" id="result-label">Result</span>
+      <span class="result-value" id="result-value">&mdash;</span>
+      <div class="result-breakdown" id="result-breakdown"></div>
+      <span class="status-line" id="status-line"></span>
+    </div>
+
+    <div class="dice-cam" id="dice-cam" aria-hidden="true">
+      <span class="dice-cam-label">Dice View</span>
+    </div>
+
+    <div class="dock">
+      <div class="dock-mirror" aria-hidden="true"></div>
+      <div class="dock-center">
+      <div class="die-select" id="die-select" role="group" aria-label="Select die type"></div>
+      <div class="qty-control" role="group" aria-label="Number of dice">
+        <span class="qty-label">Dice</span>
+        <button class="qty-btn" id="qty-minus" aria-label="Decrease dice count">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>
+        </button>
+        <span class="qty-value" id="qty-value">1</span>
+        <button class="qty-btn" id="qty-plus" aria-label="Increase dice count">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <button class="roll-btn" id="roll-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-3.5-7.1"/><path d="M21 3v6h-6"/>
+        </svg>
+        <span id="roll-btn-label">Roll</span>
+      </button>
+      </div>
+      <div class="history-row">
+        <span class="history-label">Recent Rolls</span>
+        <div class="history-list" id="history-list" aria-live="polite">
+          <span class="history-empty">No rolls yet</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading-overlay">
+      <svg class="loader-die" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <path d="M20 2 L36 11 V29 L20 38 L4 29 V11 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M20 2 V38 M4 11 L36 29 M36 11 L4 29" stroke="currentColor" stroke-width="1.4" opacity="0.6"/>
+      </svg>
+      <p id="loading-text">Polishing acrylic&hellip;</p>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="zoom" id="zoom"><img id="zoomImg" alt="Card"></div>
+
+<!-- ===================== HOW TO PLAY ===================== -->
+<div class="rules" id="rules" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+  <div class="rules-panel" id="rules-panel">
+    <button class="rules-close" id="rules-close" aria-label="Close rules">&times;</button>
+    <div class="rules-head">
+      <h2 id="rules-title">How to Play</h2>
+      <p>A Race of Fate, Fortune, and Perfect Rolls.</p>
+    </div>
+
+    <div class="rules-grid">
+      <section>
+        <h3>The Goal</h3>
+        <p>Start at the Verdant Threshold. Reach the Golden Gate of Elysium at the top. The first three
+           heroes to arrive place first, second, and third.</p>
+      </section>
+
+      <section>
+        <h3>Your Turn</h3>
+        <ol>
+          <li>Pick a die: D4, D6, or D8.</li>
+          <li>Roll and walk that many spaces.</li>
+          <li>Do what the space you land on says.</li>
+          <li>Next hero.</li>
+        </ol>
+        <p class="aside">Only the space you stop on matters. Share spaces freely.</p>
+        <p class="aside">Whoever is in the lead may not take the D8. The front runner walks carefully.</p>
+      </section>
+
+      <section>
+        <h3>The Dice</h3>
+        <table class="legend">
+          <tr><td>D4</td><td>Careful</td></tr>
+          <tr><td>D6</td><td>Standard</td></tr>
+          <tr><td>D8</td><td>Bold &mdash; not for the leader</td></tr>
+          <tr><td>D12</td><td>Last place only &mdash; a 1 rolls again</td></tr>
+          <tr><td>D20</td><td>Once per game</td></tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>The Spaces</h3>
+        <table class="legend">
+          <tr><td><i class="sw" style="background:#8a6f3f"></i>Brown</td><td>Forward 3</td></tr>
+          <tr><td><i class="sw" style="background:#0b0f0c"></i>Black</td><td>Back 3</td></tr>
+          <tr><td><i class="sw" style="background:var(--blessing)"></i>Green</td><td>Draw a Blessing</td></tr>
+          <tr><td><i class="sw" style="background:var(--ordeal)"></i>Red</td><td>Draw an Ordeal</td></tr>
+          <tr><td><i class="sw" style="background:var(--dilemma)"></i>Blue</td><td>Draw a Dilemma, pick one option</td></tr>
+          <tr><td><i class="sw" style="background:#f4efe2"></i>White</td><td>Nothing</td></tr>
+          <tr><td><i class="sw" style="background:#e5c451"></i>Yellow</td><td>Nothing, unless you opened a Gate</td></tr>
+          <tr><td><i class="sw" style="background:#8f1d16"></i>Stop sign</td><td>Golden Gate &mdash; stop here</td></tr>
+          <tr><td><i class="sw" style="background:var(--gold)"></i>Gold</td><td>Finish</td></tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Golden Gates</h3>
+        <p>Land on a stop sign and you stop, even mid-move. Here is where the paths diverge.</p>
+        <p>On your next turn, pick a die and roll. If you roll its highest face, you may take the Golden
+           Path shortcut. Roll anything else and you&rsquo;ll go the long way. The fates decide.</p>
+        <p class="aside">Small die, better odds. Big die, better consolation. One attempt per Gate.
+           The leader still cannot pick the D8, even here.</p>
+        <table class="legend odds">
+          <tr><td>D4</td><td>1 in 4</td><td>miss: move 1&ndash;3</td></tr>
+          <tr><td>D6</td><td>1 in 6</td><td>miss: move 1&ndash;5</td></tr>
+          <tr><td>D8</td><td>1 in 8</td><td>miss: move 1&ndash;7</td></tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Favor of the Forgotten</h3>
+        <p>Whoever is furthest behind may roll the D12 instead. No measuring &mdash; if it is obvious,
+           it counts.</p>
+        <p>Roll a 1 and the fates take pity: move the single space, then roll again.</p>
+      </section>
+
+      <section>
+        <h3>Appeal to the Fates</h3>
+        <p>Once per game, roll the D20 instead of moving normally.</p>
+        <table class="legend">
+          <tr><td>1&ndash;4</td><td>Back 3</td></tr>
+          <tr><td>5&ndash;9</td><td>Forward 3</td></tr>
+          <tr><td>10&ndash;14</td><td>Forward 6</td></tr>
+          <tr><td>15&ndash;18</td><td>Forward 9</td></tr>
+          <tr><td>19</td><td>Forward 12</td></tr>
+          <tr><td>20</td><td>Forward 12, roll again</td></tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Cards</h3>
+        <p>Read it, do it, discard it. Nothing is held or saved.</p>
+        <p>If a card lands you on a colored space, resolve that too &mdash; then stop. Never a third.</p>
+      </section>
+
+      <section>
+        <h3>Winning</h3>
+        <p>Reach or pass the gold space. No exact roll needed. Step off the trail and claim your place.</p>
+      </section>
+
+      <section>
+        <h3>If You Are Stuck</h3>
+        <p>The host decides. The host is always right.</p>
+      </section>
+    </div>
+
+    <div class="rules-foot">Epicism Presents &middot; Elysian Trail</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     COVER PAGE GATE
+     The real check lives in auth.php, so the code is never shipped
+     to the browser. When PHP is unavailable (opened straight off a
+     hard drive, or hosted statically), it falls back to comparing
+     digests of the typed code — the code itself still is not in
+     this file, only one-way hashes of it.
+     ============================================================ -->
+<script>
+(function(){
+  var cover = document.getElementById('cover');
+  if (!cover) return;
+  var form  = document.getElementById('cover-form');
+  var input = document.getElementById('cover-code');
+  var btn   = document.getElementById('cover-go');
+  var note  = document.getElementById('cover-note');
+
+  /* One-way digests of the current code. Reversing these is not practical,
+     and rotating the code on the server means editing elysian-config.php. */
+  var DIGEST_SHA256 = 'a296557d4453d225b3d961657ce77d93dd0deac01f49add5932b8fe3738286e4';
+  var DIGEST_DJB2   = 4193322964;
+
+  function say(msg, cls){ note.textContent = msg || ''; note.className = 'cover-note' + (cls ? ' ' + cls : ''); }
+
+  window.__ELYSIAN_LOCKED = true;   // card/dice hotkeys stay dormant behind the cover
+
+  function enter(quiet){
+    window.__ELYSIAN_LOCKED = false;
+    if (!quiet) say('The gate opens.', 'good');
+    cover.classList.add('gone');
+    // Drop it from the layout once the fade finishes.
+    setTimeout(function(){ cover.style.display = 'none'; window.dispatchEvent(new Event('resize')); }, 950);
+  }
+
+  /* The server stamps this in when a PHP session already holds a pass,
+     so a refresh does not ask again. */
+  if (window.__ELYSIAN_PASS === true){
+    window.__ELYSIAN_LOCKED = false;
+    cover.classList.add('gone'); cover.style.display = 'none';
+  } else {
+    setTimeout(function(){ input.focus(); }, 120);
+  }
+
+  function djb2(s){
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  function sha256Hex(s){
+    if (!(window.crypto && crypto.subtle && crypto.subtle.digest)) return Promise.resolve(null);
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function(buf){
+      return Array.prototype.map.call(new Uint8Array(buf), function(b){
+        return ('0' + b.toString(16)).slice(-2);
+      }).join('');
+    }).catch(function(){ return null; });
+  }
+
+  /* Offline / static fallback check. */
+  function localCheck(code){
+    return sha256Hex(code).then(function(hex){
+      if (hex) return hex === DIGEST_SHA256;
+      return djb2(code) === DIGEST_DJB2;   // very old browser, or no secure context
+    });
+  }
+
+  /* Server check. Resolves null when there is no PHP to talk to. */
+  function serverCheck(code){
+    if (location.protocol === 'file:') return Promise.resolve(null);
+    return fetch('./auth.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code }),
+      credentials: 'same-origin'
+    }).then(function(res){
+      if (!res.ok && res.status !== 401 && res.status !== 429) return null;
+      return res.json().then(function(data){
+        return (data && typeof data.ok === 'boolean') ? data : null;
+      }).catch(function(){ return null; });
+    }).catch(function(){ return null; });
+  }
+
+  function reject(msg){
+    say(msg || 'That is not the word.', 'bad');
+    form.classList.remove('shake');
+    void form.offsetWidth;
+    form.classList.add('shake');
+    input.select();
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var code = input.value.trim();
+    if (!code){ reject('The gate awaits a word.'); return; }
+
+    btn.disabled = true;
+    say('Consulting the fates\u2026');
+
+    serverCheck(code).then(function(server){
+      if (server) return server.ok ? true : (server.message === 'Slow down.' ? 'slow' : false);
+      return localCheck(code);   // no PHP available — verify against the digest
+    }).then(function(ok){
+      btn.disabled = false;
+      if (ok === true) enter(false);
+      else if (ok === 'slow') say('One moment\u2026', 'bad');
+      else reject();
+    }).catch(function(){
+      btn.disabled = false;
+      reject('Something went wrong. Try again.');
+    });
+  });
+})();
+</script>
+
+<!-- ============================================================
+     CARD TABLE  (plain script — works with or without the 3D tray)
+     ============================================================ -->
+<script>
+(function(){
+  "use strict";
+
+  /* ---- Expects this file to sit beside the card folders ----
+       index.html
+       assets/epicism-logo.png
+       blessings/  blessing.png (back) + blessing01..18.png
+       ordeals/    ordeal.png   (back) + ordeal01..18.png
+       dilemmas/   dilemma.png  (back) + dilemma01..18.png
+  ---------------------------------------------------------- */
+  var DECK_SIZE = 18;
+  var DECKS = [
+    { id:'blessing', cls:'b', name:'Blessings', folder:'blessings', prefix:'blessing', hotkey:'1' },
+    { id:'ordeal',   cls:'o', name:'Ordeals',   folder:'ordeals',   prefix:'ordeal',   hotkey:'2' },
+    { id:'dilemma',  cls:'d', name:'Dilemmas',  folder:'dilemmas',  prefix:'dilemma',  hotkey:'3' }
+  ];
+  var MAX_VISIBLE_DISCARD = 6;
+  var STACK_LAYERS = 5;
+
+  DECKS.forEach(function(d){
+    d.back = d.folder + '/' + d.prefix + '.png';
+    d.faces = [];
+    for (var i = 1; i <= DECK_SIZE; i++){
+      d.faces.push(d.folder + '/' + d.prefix + (i < 10 ? '0' + i : i) + '.png');
+    }
+  });
+  var BY_ID = {};
+  DECKS.forEach(function(d){ BY_ID[d.id] = d; });
+
+  var state = { piles:{}, discard:[] };
+  var undoStack = [];
+  var lastDealtKey = null;
+
+  function freshPile(){ var a = []; for (var i=0;i<DECK_SIZE;i++) a.push(i); return shuffle(a); }
+  function shuffle(a){
+    for (var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; }
+    return a;
+  }
+  function snapshot(){ undoStack.push(JSON.stringify(state)); if (undoStack.length>200) undoStack.shift(); }
+  function resetAll(){ DECKS.forEach(function(d){ state.piles[d.id] = freshPile(); }); state.discard = []; }
+
+  var decksEl   = document.getElementById('decks');
+  var discardEl = document.getElementById('discard');
+  var captionEl = document.getElementById('caption');
+  var undoBtn   = document.getElementById('undoBtn');
+  var toastEl   = document.getElementById('toast');
+  var zoomEl    = document.getElementById('zoom');
+  var zoomImg   = document.getElementById('zoomImg');
+
+  DECKS.forEach(function(d){
+    var wrap = document.createElement('div');
+    wrap.className = 'deck ' + d.cls;
+    wrap.innerHTML =
+      '<div class="stack" data-deck="' + d.id + '" title="Draw a ' + d.name.replace(/s$/,'') + '"></div>' +
+      '<div class="deck-meta" style="display:flex;flex-direction:column;align-items:center;gap:3px">' +
+        '<div class="deck-name"><i class="pip"></i>' + d.name + '</div>' +
+        '<div class="count"></div>' +
+      '</div>';
+    decksEl.appendChild(wrap);
+    d.stackEl = wrap.querySelector('.stack');
+    d.countEl = wrap.querySelector('.count');
+    d.stackEl.addEventListener('click', function(){ draw(d.id); });
+    var im = new Image(); im.src = d.back;   // preload backs
+  });
+
+  function renderDecks(){
+    DECKS.forEach(function(d){
+      var n = state.piles[d.id].length, el = d.stackEl;
+      el.innerHTML = '';
+      if (n === 0){
+        var slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.innerHTML = '<span>Deck spent<br>click to shuffle</span>';
+        el.appendChild(slot);
+      } else {
+        var layers = Math.max(1, Math.min(STACK_LAYERS, Math.ceil(n / 4)));
+        for (var i = layers - 1; i >= 0; i--){
+          var img = document.createElement('img');
+          img.src = d.back; img.alt = d.name + ' deck'; img.draggable = false;
+          img.style.transform = 'translate(' + (i * -1.5) + 'px,' + (i * -2) + 'px)';
+          img.style.opacity = i === 0 ? '1' : (0.9 - i * 0.05);
+          el.appendChild(img);
+        }
+      }
+      d.countEl.innerHTML = '<b>' + n + '</b> / ' + DECK_SIZE + ' in deck';
+    });
+  }
+
+  function renderDiscard(){
+    discardEl.innerHTML = '';
+    if (!state.discard.length){
+      var slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.innerHTML = '<span>Drawn cards<br>rest here</span>';
+      discardEl.appendChild(slot);
+      captionEl.innerHTML = '';
+      return;
+    }
+    var visible = state.discard.slice(-MAX_VISIBLE_DISCARD);
+    visible.forEach(function(entry, i){
+      var d = BY_ID[entry.deck];
+      var isTop = (i === visible.length - 1);
+      var img = document.createElement('img');
+      img.src = d.faces[entry.idx];
+      img.alt = d.name.replace(/s$/,'') + ' card ' + (entry.idx + 1);
+      img.draggable = false;
+      var seed = (entry.idx * 37 + i * 11) % 100 / 100;
+      var rot = isTop ? (seed * 3 - 1.5) : (seed * 10 - 5);
+      var dx  = isTop ? 0 : (seed * 12 - 6);
+      var dy  = isTop ? 0 : (seed * 10 - 5);
+      img.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + rot.toFixed(2) + 'deg)';
+      img.style.zIndex = String(i + 1);
+      if (isTop){
+        img.classList.add('top');
+        var key = entry.deck + '-' + entry.idx + '-' + state.discard.length;
+        if (key === lastDealtKey) img.classList.add('deal');
+        img.addEventListener('click', function(){ openZoom(img); });
+      } else {
+        img.style.filter = 'drop-shadow(0 6px 12px rgba(0,0,0,.5)) brightness(.82)';
+      }
+      discardEl.appendChild(img);
+    });
+    var top = state.discard[state.discard.length - 1];
+    var td = BY_ID[top.deck];
+    captionEl.innerHTML = '<b>' + td.name.replace(/s$/,'') + ' ' + (top.idx + 1) + '</b><br>' +
+      state.discard.length + ' discarded &middot; click to enlarge';
+  }
+
+  function render(){ renderDecks(); renderDiscard(); undoBtn.disabled = undoStack.length === 0; }
+
+  function draw(deckId){
+    var d = BY_ID[deckId];
+    snapshot();
+    var reshuffled = false;
+    if (state.piles[deckId].length === 0){
+      state.piles[deckId] = freshPile();
+      reshuffled = true;
+      d.stackEl.classList.remove('shuffling'); void d.stackEl.offsetWidth;
+      d.stackEl.classList.add('shuffling');
+      toast(d.name + ' reshuffled');
+    }
+    var idx = state.piles[deckId].pop();
+    state.discard.push({ deck:deckId, idx:idx });
+    lastDealtKey = deckId + '-' + idx + '-' + state.discard.length;
+    render();
+    presentDrawnCard();
+    if (!reshuffled && state.piles[deckId].length === 0) toast(d.name + ' deck is spent');
+  }
+
+  function undo(){
+    if (!undoStack.length) return;
+    cancelPresent();
+    state = JSON.parse(undoStack.pop());
+    lastDealtKey = null;
+    render();
+    toast('Undone');
+  }
+
+  function shuffleAll(){
+    cancelPresent();
+    snapshot(); resetAll(); lastDealtKey = null;
+    DECKS.forEach(function(d){
+      d.stackEl.classList.remove('shuffling'); void d.stackEl.offsetWidth;
+      d.stackEl.classList.add('shuffling');
+    });
+    render(); toast('All three decks shuffled');
+  }
+
+  function clearTable(){
+    cancelPresent();
+    snapshot(); state.discard = []; lastDealtKey = null; render(); toast('Discard pile cleared');
+  }
+
+  var toastTimer;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 1900);
+  }
+  window.ElysianToast = toast;
+
+  /* ---- Card zoom (FLIP: clicked rectangle <-> full view, eased both ways) ---- */
+  var ZOOM_MS = 560;          // must match the transform transition in the CSS
+  var zoomFrom = null;        // rectangle of the card that was clicked
+  var zoomTo = null;          // rectangle the enlarged card occupies
+  var zoomHideTimer = null;
+
+  function rectOf(el){
+    var r = el.getBoundingClientRect();
+    return { left:r.left, top:r.top, width:r.width, height:r.height };
+  }
+
+  // Transform that lays the enlarged card exactly over the small one it came from.
+  function flipTransform(from, to){
+    if (!from || !to || !to.width || !to.height) return 'none';
+    var s = from.width / to.width;
+    var dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+    var dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+    return 'translate(' + dx.toFixed(2) + 'px,' + dy.toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
+  }
+
+  function openZoom(srcEl){
+    clearTimeout(zoomHideTimer);
+    zoomFrom = rectOf(srcEl);
+    zoomImg.alt = srcEl.alt || 'Card';
+    if (zoomImg.src !== srcEl.src) zoomImg.src = srcEl.src;
+
+    var launch = function(){
+      // The overlay keeps its layout box while hidden, so the enlarged card can be
+      // measured and pre-placed over the small one before anything becomes visible.
+      zoomImg.classList.add('snap');
+      zoomImg.style.transform = '';
+      void zoomImg.offsetWidth;
+      zoomTo = rectOf(zoomImg);
+      zoomImg.style.transform = flipTransform(zoomFrom, zoomTo);
+      void zoomImg.offsetWidth;
+      zoomEl.classList.add('show');
+      zoomImg.classList.remove('snap');
+      requestAnimationFrame(function(){ zoomImg.style.transform = 'translate(0px,0px) scale(1)'; });
+    };
+
+    // The face is already on screen, so it is cached; guard anyway.
+    if (zoomImg.complete && zoomImg.naturalWidth) launch();
+    else zoomImg.onload = function(){ launch(); };
+  }
+
+  function closeZoom(){
+    if (!zoomEl.classList.contains('show')) return;
+    zoomImg.style.transform = flipTransform(zoomFrom, zoomTo || rectOf(zoomImg));
+    zoomEl.classList.remove('show');
+    clearTimeout(zoomHideTimer);
+    zoomHideTimer = setTimeout(function(){
+      zoomImg.classList.add('snap');
+      zoomImg.style.transform = '';
+      void zoomImg.offsetWidth;
+      zoomImg.classList.remove('snap');
+    }, ZOOM_MS + 40);
+  }
+
+  // A freshly drawn card presents itself: the deal flourish plays out on the pile,
+  // then the same eased zoom opens so the table can read it without a second click.
+  var DEAL_MS = 460;
+  var presentTimer = null;
+  function presentDrawnCard(){
+    clearTimeout(presentTimer);
+    presentTimer = setTimeout(function(){
+      var topEl = discardEl.querySelector('img.top');
+      if (topEl) openZoom(topEl);
+    }, DEAL_MS);
+  }
+  function cancelPresent(){ clearTimeout(presentTimer); }
+
+  zoomEl.addEventListener('click', closeZoom);
+  window.addEventListener('resize', function(){ if (zoomEl.classList.contains('show')) zoomTo = rectOf(zoomImg); });
+
+  /* ---- How to Play ---- */
+  var rulesEl = document.getElementById('rules');
+  var rulesPanel = document.getElementById('rules-panel');
+  var rulesBtn = document.getElementById('rulesBtn');
+  function openRules(){
+    rulesEl.classList.add('show');
+    rulesPanel.scrollTop = 0;
+    document.getElementById('rules-close').focus();
+  }
+  function closeRules(){ rulesEl.classList.remove('show'); }
+  function rulesOpen(){ return rulesEl.classList.contains('show'); }
+  rulesBtn.addEventListener('click', openRules);
+  document.getElementById('rules-close').addEventListener('click', closeRules);
+  // Click the dim backdrop to dismiss; clicks inside the panel are ignored.
+  rulesEl.addEventListener('click', function(e){ if (e.target === rulesEl) closeRules(); });
+
+  undoBtn.addEventListener('click', undo);
+  document.getElementById('shuffleBtn').addEventListener('click', shuffleAll);
+  document.getElementById('clearBtn').addEventListener('click', clearTable);
+
+  document.addEventListener('keydown', function(e){
+    if (window.__ELYSIAN_LOCKED) return;   // cover page still up
+    if (e.key === 'Escape'){ closeRules(); closeZoom(); return; }
+    // While the rules are open, only the close keys do anything.
+    if (rulesOpen()){
+      if (e.key === 'h' || e.key === 'H' || e.key === '?'){ e.preventDefault(); closeRules(); }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); undo(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+    if (e.key === '?'){ e.preventDefault(); openRules(); return; }
+    var k = e.key.toLowerCase();
+    var hit = DECKS.filter(function(d){ return d.hotkey === e.key; })[0];
+    if (hit){ e.preventDefault(); draw(hit.id); }
+    else if (k === 'u'){ undo(); }
+    else if (k === 's'){ shuffleAll(); }
+    else if (k === 'h'){ openRules(); }
+    else if (k === 'r' || e.key === ' '){ e.preventDefault(); window.DiceUI.requestRoll(); }
+  });
+
+  resetAll();
+  render();
+})();
+</script>
+
+<!-- ============================================================
+     ROLL TRAY UI  (works standalone; the 3D engine attaches to it)
+     ============================================================ -->
+<script>
+(function(){
+  "use strict";
+
+  var DIE_ORDER = ['D4','D6','D8','D10','D12','D20'];
+  var FACES = { D4:4, D6:6, D8:8, D10:10, D12:12, D20:20 };
+  var MAX_DICE = 6;
+  var ICONS = {
+    D4:'M12 2 L21 20 H3 Z',
+    D6:'M4 4 H20 V20 H4 Z',
+    D8:'M12 2 L21 12 L12 22 L3 12 Z',
+    D10:'M12 2 L19 8 L21 16 L12 22 L3 16 L5 8 Z',
+    D12:'M12 1.5 L19 5 L21.5 12 L19 19 L12 22.5 L5 19 L2.5 12 L5 5 Z',
+    D20:'M12 1.5 L20 7 L20 17 L12 22.5 L4 17 L4 7 Z'
+  };
+
+  var el = {
+    select:   document.getElementById('die-select'),
+    qtyValue: document.getElementById('qty-value'),
+    qtyMinus: document.getElementById('qty-minus'),
+    qtyPlus:  document.getElementById('qty-plus'),
+    rollBtn:  document.getElementById('roll-btn'),
+    rollLbl:  document.getElementById('roll-btn-label'),
+    label:    document.getElementById('result-label'),
+    value:    document.getElementById('result-value'),
+    breakdown:document.getElementById('result-breakdown'),
+    status:   document.getElementById('status-line'),
+    history:  document.getElementById('history-list'),
+    loading:  document.getElementById('loading-overlay'),
+    loadText: document.getElementById('loading-text'),
+    sound:    document.getElementById('sound-toggle'),
+    soundIcon:document.getElementById('sound-icon')
+  };
+
+  var UI = {
+    type: 'D6',
+    count: 1,
+    rolling: false,
+    soundOn: true,
+    engine: null,          // set by the 3D module once ready
+    history: []
+  };
+  window.DiceUI = UI;
+
+  /* ---- die buttons ---- */
+  DIE_ORDER.forEach(function(type){
+    var btn = document.createElement('button');
+    btn.className = 'die-btn' + (type === UI.type ? ' active' : '');
+    btn.dataset.type = type;
+    btn.setAttribute('aria-label', 'Select ' + type);
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
+      'stroke-linejoin="round"><path d="' + ICONS[type] + '"/></svg><span>' + type + '</span>';
+    btn.addEventListener('click', function(){
+      if (UI.rolling) return;
+      UI.type = type;
+      Array.prototype.forEach.call(document.querySelectorAll('.die-btn'), function(b){
+        b.classList.toggle('active', b.dataset.type === type);
+      });
+      el.label.textContent = 'Result';
+      el.value.classList.remove('waiting');
+      el.value.textContent = '\u2014';
+      el.breakdown.innerHTML = '';
+      el.status.textContent = type + ' selected \u00b7 ready to roll';
+    });
+    el.select.appendChild(btn);
+  });
+
+  el.qtyMinus.addEventListener('click', function(){
+    if (UI.rolling) return;
+    UI.count = Math.max(1, UI.count - 1); el.qtyValue.textContent = UI.count;
+  });
+  el.qtyPlus.addEventListener('click', function(){
+    if (UI.rolling) return;
+    UI.count = Math.min(MAX_DICE, UI.count + 1); el.qtyValue.textContent = UI.count;
+  });
+
+  el.sound.addEventListener('click', function(){
+    UI.soundOn = !UI.soundOn;
+    el.sound.setAttribute('aria-pressed', String(!UI.soundOn));
+    el.soundIcon.style.opacity = UI.soundOn ? '1' : '.4';
+  });
+
+  /* ---- rolling ---- */
+  UI.requestRoll = function(){
+    if (UI.rolling) return;
+    UI.rolling = true;
+    el.rollBtn.disabled = true;
+    el.rollLbl.textContent = 'Rolling\u2026';
+    el.label.textContent = 'Rolling';
+    el.value.classList.remove('pop');
+    el.value.classList.add('waiting');
+    el.value.textContent = '\u00b7\u00b7\u00b7';
+    el.breakdown.innerHTML = '';
+    el.status.textContent = 'Tumbling\u2026';
+    if (UI.engine) UI.engine.roll(UI.type, UI.count);
+    else flatRoll();
+  };
+  el.rollBtn.addEventListener('click', UI.requestRoll);
+
+  // Instant fallback roll used when the 3D tray is unavailable (offline, no WebGL).
+  function flatRoll(){
+    var faces = FACES[UI.type], n = UI.count, ticks = 0;
+    var spin = setInterval(function(){
+      if (++ticks > 12){
+        clearInterval(spin);
+        var results = [];
+        for (var j=0;j<n;j++) results.push(1 + Math.floor(Math.random()*faces));
+        UI.finalize(results, UI.type);
+      }
+    }, 55);
+  }
+
+  // The engine still reports running totals while dice tumble; they are deliberately
+  // not displayed. Only a settled roll ever produces a number.
+  UI.flicker = function(){};
+
+  UI.finalize = function(results, type){
+    var total = results.reduce(function(a,b){ return a + b; }, 0);
+    el.label.textContent = results.length > 1 ? 'Total' : 'Result';
+    el.value.classList.remove('waiting');
+    el.value.textContent = String(total);
+    el.value.classList.remove('pop');
+    requestAnimationFrame(function(){ el.value.classList.add('pop'); });
+    el.breakdown.innerHTML = '';
+    if (results.length > 1){
+      results.forEach(function(r){
+        var chip = document.createElement('span');
+        chip.className = 'die-chip'; chip.textContent = r;
+        el.breakdown.appendChild(chip);
+      });
+    }
+    el.status.textContent = type + ' \u00d7 ' + results.length + ' \u00b7 settled';
+    el.rollBtn.disabled = false;
+    el.rollLbl.textContent = 'Roll again';
+    UI.rolling = false;
+
+    UI.history.unshift({ total: total, type: type, count: results.length });
+    if (UI.history.length > 6) UI.history.pop();
+    renderHistory();
+  };
+
+  /* ---- recent rolls: each total sits inside the silhouette of the die that produced it ---- */
+  var CHIP_TEXT = {   // baseline + type size tuned per silhouette so digits sit in the widest part
+    D4:  { y:18.0, fs:8.6 },
+    D6:  { y:15.4, fs:9.6 },
+    D8:  { y:15.4, fs:9.0 },
+    D10: { y:15.6, fs:9.0 },
+    D12: { y:15.4, fs:9.4 },
+    D20: { y:15.6, fs:9.4 }
+  };
+  function renderHistory(){
+    el.history.innerHTML = '';
+    if (!UI.history.length){
+      var none = document.createElement('span');
+      none.className = 'history-empty'; none.textContent = 'No rolls yet';
+      el.history.appendChild(none);
+      return;
+    }
+    UI.history.forEach(function(h, i){
+      var cfg  = CHIP_TEXT[h.type] || CHIP_TEXT.D6;
+      var digs = String(h.total).length;
+      var fs   = digs >= 3 ? cfg.fs * 0.72 : (digs === 2 ? cfg.fs * 0.92 : cfg.fs);
+      var chip = document.createElement('span');
+      chip.className = 'history-chip' + (i === 0 ? ' latest' : '');
+      chip.title = h.type + (h.count > 1 ? ' \u00d7' + h.count : '') + ' \u2014 ' + h.total;
+      chip.setAttribute('aria-label', chip.title);
+      chip.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + ICONS[h.type] + '"/>' +
+        '<text x="12" y="' + cfg.y + '" font-size="' + fs.toFixed(2) + '">' + h.total + '</text></svg>' +
+        (h.count > 1 ? '<span class="chip-count">\u00d7' + h.count + '</span>' : '');
+      el.history.appendChild(chip);
+    });
+  }
+
+  /* ---- engine handshake ---- */
+  UI.attach = function(engine){
+    UI.engine = engine;
+    el.loading.classList.add('hidden');
+    el.status.textContent = UI.type + ' selected \u00b7 ready to roll';
+  };
+  UI.failEngine = function(err){
+    if (err) console.error('Dice tray fell back to simple rolls:', err);
+    el.loading.classList.add('hidden');
+    el.status.textContent = 'Simple roll mode \u00b7 3D tray unavailable';
+    var zone = document.getElementById('dice-zone');
+    if (zone && !document.getElementById('tray-fallback')){
+      var note = document.createElement('div');
+      note.id = 'tray-fallback';
+      note.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+        'text-align:center;padding:40px 24px 90px;font-family:Cinzel,Georgia,serif;font-size:.62rem;' +
+        'letter-spacing:.2em;text-transform:uppercase;color:rgba(240,220,166,.42);line-height:2.2;pointer-events:none';
+      note.innerHTML = 'The 3D tray needs an internet connection<br>Dice still roll &mdash; results appear above';
+      zone.appendChild(note);
+    }
+  };
+  // If the engine never checks in, fall back gracefully.
+  setTimeout(function(){ if (!UI.engine) UI.failEngine(null); }, 15000);
+
+  el.status.textContent = UI.type + ' selected \u00b7 preparing tray\u2026';
+})();
+</script>
+
+
+<!-- ============================================================
+     3D ROLL TRAY ENGINE  (three.js + Rapier physics)
+     ============================================================ -->
+<script type="module">
+(async () => {
+try {
+  // main.js — Verdant Roll: physics-based 3D acrylic dice roller
+  const THREE = await import('three');
+  const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default;
+
+  /* ---------------------------------------------------------------------- */
+  /* Config                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  const DIE_ORDER = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20'];
+  const FACE_COUNT = { D4: 4, D6: 6, D8: 8, D10: 10, D12: 12, D20: 20 };
+  const DIE_RADIUS = 0.52; // approx circumradius (world units) shared across die types
+  const MAX_DICE = 6;
+  // The play surface is deliberately wider than it is deep. A wide, shallow tray
+  // spreads dice along the horizontal axis instead of letting them pile into the
+  // bottom edge, where the roll controls sit. Same felt area as the old square.
+  const TRAY_HX = 5.6;                 // half-width  (screen left/right)
+  const TRAY_HZ = 3.3;                 // half-depth  (screen up/down)
+  const WALL_H = 1.05;
+  const WALL_T = 0.34;
+  const OUT_HX = TRAY_HX + WALL_T;
+  const OUT_HZ = TRAY_HZ + WALL_T;
+  // Extra world-space margin framed below the tray so the control dock overlays
+  // backdrop rather than felt. Recomputed from the real dock height on resize.
+  let BOTTOM_PAD = 1.4;
+  // The whole plan view is then nudged down the screen by this many pixels, which
+  // opens a strip of padding above the tray and lets the bottom rail dip behind
+  // the controls — where nothing needs to be read.
+  const VIEW_SHIFT_PX = 20;
+  const SETTLE_QUIET_TIME = 0.35; // seconds under threshold before considered settled
+  const LIN_SLEEP_THRESH = 0.045;
+  const ANG_SLEEP_THRESH = 0.05;
+  const HARD_TIMEOUT_MS = 7000;
+  const FIXED_TIMESTEP = 1 / 60;
+
+  const GREEN_HEX = 0x23e37a;
+
+  // Epicism infinity mark — exact path data + viewBox from the brand SVG,
+  // inlaid as a centered white emblem on the felt.
+  const INFINITY_PATH_D =
+    'M77.36,20.32l-2.49,2.71-2.38-2.61C44.09-9.09,0-7.81,0,33.2s44.09,42.28,72.48,12.54l2.47-2.73,2.41,2.63c28.38,29.75,72.47,28.48,72.47-12.53s-44.09-42.29-72.47-12.78ZM10.96,33.2c0-20.48,26.94-34.14,53.56,0-26.61,33.86-53.56,20.49-53.56,0ZM85.31,33.1c26.62-34.14,53.56-20.48,53.56,0s-26.94,33.86-53.56,0Z';
+  const INFINITY_VIEWBOX = { w: 149.83, h: 66.26 };
+
+  /* ---------------------------------------------------------------------- */
+  /* Math helpers                                                            */
+  /* ---------------------------------------------------------------------- */
+
+  const PHI = (1 + Math.sqrt(5)) / 2;
+
+  function vlen(v) {
+    return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  }
+  function vscale(v, s) {
+    return [v[0] * s, v[1] * s, v[2] * s];
+  }
+  function vsub(a, b) {
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  }
+  function vcross(a, b) {
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  }
+  function vdot(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  }
+  function vnorm(v) {
+    const l = vlen(v) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  }
+  function vavg(verts, idxs) {
+    const c = [0, 0, 0];
+    idxs.forEach((i) => {
+      c[0] += verts[i][0];
+      c[1] += verts[i][1];
+      c[2] += verts[i][2];
+    });
+    return [c[0] / idxs.length, c[1] / idxs.length, c[2] / idxs.length];
+  }
+
+  // Computes an outward-facing {center, normal} for a planar convex face loop.
+  function faceFromLoop(verts, loopIdx) {
+    const A = verts[loopIdx[0]];
+    const B = verts[loopIdx[1]];
+    const C = verts[loopIdx[2]];
+    let n = vnorm(vcross(vsub(B, A), vsub(C, A)));
+    const center = vavg(verts, loopIdx);
+    if (vdot(n, center) < 0) n = vscale(n, -1);
+    return { center, normal: n };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Raw platonic-solid data (matches Three.js built-in Polyhedron sources)  */
+  /* ---------------------------------------------------------------------- */
+
+  const RAW = {
+    tetra: {
+      verts: [
+        [1, 1, 1],
+        [-1, -1, 1],
+        [-1, 1, -1],
+        [1, -1, -1],
+      ],
+    },
+    octa: {
+      verts: [
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+        [0, 0, 1],
+        [0, 0, -1],
+      ],
+      faces: [
+        [0, 2, 4],
+        [0, 4, 3],
+        [0, 3, 5],
+        [0, 5, 2],
+        [1, 2, 5],
+        [1, 5, 3],
+        [1, 3, 4],
+        [1, 4, 2],
+      ],
+    },
+    icosa: {
+      verts: [
+        [-1, PHI, 0],
+        [1, PHI, 0],
+        [-1, -PHI, 0],
+        [1, -PHI, 0],
+        [0, -1, PHI],
+        [0, 1, PHI],
+        [0, -1, -PHI],
+        [0, 1, -PHI],
+        [PHI, 0, -1],
+        [PHI, 0, 1],
+        [-PHI, 0, -1],
+        [-PHI, 0, 1],
+      ],
+      faces: [
+        [0, 11, 5],
+        [0, 5, 1],
+        [0, 1, 7],
+        [0, 7, 10],
+        [0, 10, 11],
+        [1, 5, 9],
+        [5, 11, 4],
+        [11, 10, 2],
+        [10, 7, 6],
+        [7, 1, 8],
+        [3, 9, 4],
+        [3, 4, 2],
+        [3, 2, 6],
+        [3, 6, 8],
+        [3, 8, 9],
+        [4, 9, 5],
+        [2, 4, 11],
+        [6, 2, 10],
+        [8, 6, 7],
+        [9, 8, 1],
+      ],
+    },
+    dodeca: (() => {
+      const t = PHI;
+      const r = 1 / t;
+      const verts = [
+        [-1, -1, -1],
+        [-1, -1, 1],
+        [-1, 1, -1],
+        [-1, 1, 1],
+        [1, -1, -1],
+        [1, -1, 1],
+        [1, 1, -1],
+        [1, 1, 1],
+        [0, -r, -t],
+        [0, -r, t],
+        [0, r, -t],
+        [0, r, t],
+        [-r, -t, 0],
+        [-r, t, 0],
+        [r, -t, 0],
+        [r, t, 0],
+        [-t, 0, -r],
+        [t, 0, -r],
+        [-t, 0, r],
+        [t, 0, r],
+      ];
+      const triFans = [
+        [3, 11, 7, 3, 7, 15, 3, 15, 13],
+        [7, 19, 17, 7, 17, 6, 7, 6, 15],
+        [17, 4, 8, 17, 8, 10, 17, 10, 6],
+        [8, 0, 16, 8, 16, 2, 8, 2, 10],
+        [0, 12, 1, 0, 1, 18, 0, 18, 16],
+        [6, 10, 2, 6, 2, 13, 6, 13, 15],
+        [2, 16, 18, 2, 18, 3, 2, 3, 13],
+        [18, 1, 9, 18, 9, 11, 18, 11, 3],
+        [4, 14, 12, 4, 12, 0, 4, 0, 8],
+        [11, 9, 5, 11, 5, 19, 11, 19, 7],
+        [19, 5, 14, 19, 14, 4, 19, 4, 17],
+        [1, 12, 14, 1, 14, 5, 1, 5, 9],
+      ];
+      // extract 5 unique vertex indices per pentagon from the triangle-fan pattern
+      const faces = triFans.map((arr) => [arr[0], arr[1], arr[2], arr[5], arr[8]]);
+      return { verts, faces };
+    })(),
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Die definition builder                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  // Builds a normalized die definition: local-space geometry data + label spots.
+  function buildDieDef(type, R) {
+    if (type === 'D4') {
+      const raw = RAW.tetra.verts;
+      const rawLen = vlen(raw[0]);
+      const scale = R / rawLen;
+      const verts = raw.map((v) => vscale(v, scale));
+      // vertexSpots: pure vertex directions, used ONLY to determine which
+      // vertex points most upward once settled (that vertex's number is the result).
+      const vertexSpots = verts.map((v, i) => ({
+        normal: vnorm(v),
+        label: i + 1,
+      }));
+      // labelSpots: real D4 dice print each face with the 3 numbers of its OTHER
+      // corners (the face opposite vertex i shows the 3 numbers that are not i).
+      // Each decal must sit flush on that face's actual plane, not floating near
+      // the sharp vertex tip (which caused the old illegible sliver artifacts).
+      const faceLoops = [0, 1, 2, 3].map((excluded) => [0, 1, 2, 3].filter((i) => i !== excluded));
+      const labelSpots = [];
+      faceLoops.forEach((loop) => {
+        const { center, normal } = faceFromLoop(verts, loop);
+        loop.forEach((vi) => {
+          const vPos = verts[vi];
+          // pull the decal from the face center 60% of the way toward this corner
+          const pos = [
+            center[0] + (vPos[0] - center[0]) * 0.6,
+            center[1] + (vPos[1] - center[1]) * 0.6,
+            center[2] + (vPos[2] - center[2]) * 0.6,
+          ];
+          labelSpots.push({ pos, normal, label: vi + 1, size: R * 0.34 });
+        });
+      });
+      return {
+        type,
+        isVertexBased: true,
+        vertsLocal: verts,
+        labelSpots,
+        vertexSpots,
+        hullPoints: new Float32Array(verts.flat()),
+        builtin: 'tetra',
+        R,
+      };
+    }
+
+    if (type === 'D6') {
+      const half = R / Math.sqrt(3);
+      const axes = [
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+        [0, 0, 1],
+        [0, 0, -1],
+      ];
+      const labelsForAxis = [1, 6, 2, 5, 3, 4];
+      const labelSpots = axes.map((n, i) => ({
+        pos: vscale(n, half),
+        normal: n,
+        label: labelsForAxis[i],
+        size: half * 1.1,
+      }));
+      return {
+        type,
+        isVertexBased: false,
+        vertsLocal: axes.map((n) => vscale(n, half)),
+        labelSpots,
+        hullPoints: null,
+        builtin: 'box',
+        half,
+        R,
+      };
+    }
+
+    if (type === 'D8' || type === 'D20' || type === 'D12') {
+      const key = type === 'D8' ? 'octa' : type === 'D20' ? 'icosa' : 'dodeca';
+      const raw = RAW[key];
+      const rawLen = vlen(raw.verts[0]);
+      const scale = R / rawLen;
+      const verts = raw.verts.map((v) => vscale(v, scale));
+      const labelSpots = raw.faces.map((loop, i) => {
+        const { center, normal } = faceFromLoop(verts, loop);
+        const faceSize =
+          key === 'octa' ? R * 0.5 : key === 'icosa' ? R * 0.34 : R * 0.42;
+        return { pos: center, normal, label: i + 1, size: faceSize };
+      });
+      return {
+        type,
+        isVertexBased: false,
+        vertsLocal: verts,
+        labelSpots,
+        hullPoints: new Float32Array(verts.flat()),
+        builtin: key,
+        R,
+      };
+    }
+
+    if (type === 'D10') {
+      /* True pentagonal trapezohedron: 10 congruent, PLANAR kite faces.
+         Belt vertices zig-zag at 36 deg steps between y = +h and y = -h; the apex
+         height H is not free — it is fixed by the requirement that each kite
+         (apex, belt k, belt k+1, belt k+2) be coplanar. For belt radius r and
+         belt half-height h that condition is exactly
+             H = h * (1 + cos 36deg) / (1 - cos 36deg)
+         (each kite is symmetric, so apex, belt midpoint and the far belt vertex
+         must be collinear in the radial plane). h is chosen so the die ends up
+         very slightly taller than it is wide, like a real d10. */
+      const c36 = Math.cos(Math.PI / 5);
+      const r = 1;
+      const h = 0.11; // belt half-height, in belt-radius units
+      const H = (h * (1 + c36)) / (1 - c36); // apex height -> planar kites
+      const norm = Math.max(H, Math.hypot(r, h)); // circumradius before scaling
+      const s = R / norm;
+
+      const verts = [[0, H * s, 0]];
+      for (let k = 0; k < 10; k++) {
+        const angle = (k * Math.PI) / 5;
+        verts.push([r * s * Math.cos(angle), (k % 2 === 0 ? h : -h) * s, r * s * Math.sin(angle)]);
+      }
+      verts.push([0, -H * s, 0]);
+      const TOP = 0;
+      const BOTTOM = 11;
+      const beltIdx = (k) => 1 + ((k + 10) % 10);
+      const faceLoops = [];
+      // Upper kites hang from the top apex and span two "high" belt vertices.
+      [0, 2, 4, 6, 8].forEach((k) =>
+        faceLoops.push({ loop: [TOP, beltIdx(k), beltIdx(k + 1), beltIdx(k + 2)], apex: TOP }),
+      );
+      // Lower kites hang from the bottom apex and span two "low" belt vertices.
+      [1, 3, 5, 7, 9].forEach((k) =>
+        faceLoops.push({ loop: [BOTTOM, beltIdx(k), beltIdx(k + 1), beltIdx(k + 2)], apex: BOTTOM }),
+      );
+
+      // Plane data per kite: normal from the diagonals, oriented outward.
+      const planes = faceLoops.map(({ loop }) => {
+        const P = loop.map((i) => verts[i]);
+        const center = vavg(verts, loop);
+        let n = vnorm(vcross(vsub(P[2], P[0]), vsub(P[3], P[1])));
+        if (vdot(n, center) < 0) n = vscale(n, -1);
+        return { center, normal: n };
+      });
+
+      /* Numbering: real d10s put opposite faces 11 apart. Label the five upper
+         kites 1,3,5,7,9, then give each lower kite 11 minus the label of the
+         kite it faces across the solid. */
+      const labels = new Array(10).fill(0);
+      for (let i = 0; i < 5; i++) labels[i] = i * 2 + 1;
+      for (let j = 5; j < 10; j++) {
+        let opp = 0;
+        let worst = Infinity;
+        for (let i = 0; i < 5; i++) {
+          const d = vdot(planes[j].normal, planes[i].normal);
+          if (d < worst) {
+            worst = d;
+            opp = i;
+          }
+        }
+        labels[j] = 11 - labels[opp];
+      }
+
+      const labelSpots = faceLoops.map(({ loop, apex }, i) => {
+        const { center, normal } = planes[i];
+        // Nudge the digit toward the wide end of the kite and stand it upright,
+        // reading from the belt toward the apex.
+        const toApex = vsub(verts[apex], center);
+        const up = vnorm(vsub(toApex, vscale(normal, vdot(toApex, normal))));
+        const pos = [
+          center[0] + up[0] * R * 0.05,
+          center[1] + up[1] * R * 0.05,
+          center[2] + up[2] * R * 0.05,
+        ];
+        return { pos, normal, up, label: labels[i], size: R * 0.34 };
+      });
+
+      // build custom faceted geometry (fan-triangulate each kite, fix winding)
+      const positions = [];
+      const pushTri = (iA, iB, iC) => {
+        const A = verts[iA],
+          B = verts[iB],
+          C = verts[iC];
+        let n = vcross(vsub(B, A), vsub(C, A));
+        const c = vavg(verts, [iA, iB, iC]);
+        let order = [iA, iB, iC];
+        if (vdot(n, c) < 0) order = [iA, iC, iB];
+        order.forEach((idx) => positions.push(...verts[idx]));
+      };
+      faceLoops.forEach(({ loop }) => {
+        pushTri(loop[0], loop[1], loop[2]);
+        pushTri(loop[0], loop[2], loop[3]);
+      });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.computeVertexNormals();
+
+      return {
+        type,
+        isVertexBased: false,
+        vertsLocal: verts,
+        labelSpots,
+        hullPoints: new Float32Array(verts.flat()),
+        builtin: 'custom',
+        customGeometry: geometry,
+        R,
+      };
+    }
+
+    throw new Error('Unknown die type: ' + type);
+  }
+
+  const DIE_DEFS = {};
+  DIE_ORDER.forEach((t) => (DIE_DEFS[t] = buildDieDef(t, DIE_RADIUS)));
+
+  /* ---------------------------------------------------------------------- */
+  /* Label texture cache                                                     */
+  /* ---------------------------------------------------------------------- */
+
+  const labelTextureCache = new Map();
+  function getLabelTexture(n) {
+    if (labelTextureCache.has(n)) return labelTextureCache.get(n);
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = String(n);
+    const fontScale = text.length > 1 ? 0.62 : 0.76;
+    ctx.font = `700 ${Math.floor(size * fontScale)}px 'Cabinet Grotesk', Satoshi, Arial, sans-serif`;
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 0.064;
+    ctx.strokeStyle = 'rgba(3, 14, 8, 0.88)';   // dark halo keeps digits legible
+    ctx.strokeText(text, size / 2, size / 2 + size * 0.015);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, size / 2, size / 2 + size * 0.015);
+
+    // disambiguate 6/9 (and any trailing 6/9 in two-digit numbers) with an underline,
+    // matching the convention used on real numbered dice.
+    if (n === 6 || n === 9 || String(n).endsWith('6') || String(n).endsWith('9')) {
+      const underlineY = size / 2 + size * fontScale * 0.46;
+      const underlineW = size * fontScale * 0.42;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = size * 0.052;
+      ctx.strokeStyle = 'rgba(3, 14, 8, 0.88)';
+      ctx.beginPath();
+      ctx.moveTo(size / 2 - underlineW / 2, underlineY);
+      ctx.lineTo(size / 2 + underlineW / 2, underlineY);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = size * 0.026;
+      ctx.beginPath();
+      ctx.moveTo(size / 2 - underlineW / 2, underlineY);
+      ctx.lineTo(size / 2 + underlineW / 2, underlineY);
+      ctx.stroke();
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    labelTextureCache.set(n, tex);
+    return tex;
+  }
+
+  function quaternionForNormal(normal, upHint) {
+    const n = new THREE.Vector3(...normal).normalize();
+    let refUp = upHint ? new THREE.Vector3(...upHint) : new THREE.Vector3(0, 1, 0);
+    if (Math.abs(n.dot(refUp.clone().normalize())) > 0.92) refUp = new THREE.Vector3(0, 0, 1);
+    const right = new THREE.Vector3().crossVectors(refUp, n).normalize();
+    const up = new THREE.Vector3().crossVectors(n, right).normalize();
+    const m = new THREE.Matrix4().makeBasis(right, up, n);
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+  }
+
+  const labelMaterialCache = new Map();
+  function getLabelMaterial(n) {
+    if (labelMaterialCache.has(n)) return labelMaterialCache.get(n);
+    const mat = new THREE.MeshBasicMaterial({
+      map: getLabelTexture(n),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    labelMaterialCache.set(n, mat);
+    return mat;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Body material                                                           */
+  /* ---------------------------------------------------------------------- */
+
+  // Satin acrylic rather than gloss: a tight clearcoat lobe was the other half of
+  // the glare problem, since it concentrated the highlight right over the digits.
+  const acrylicMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0x0b4a2c,
+    roughness: 0.46,
+    metalness: 0,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.5,
+    reflectivity: 0.2,
+    ior: 1.5,
+    flatShading: true,
+    envMapIntensity: 0.2,
+  });
+
+  const geometryCache = new Map();
+  function getBodyGeometry(def) {
+    if (geometryCache.has(def.type)) return geometryCache.get(def.type);
+    let geo;
+    switch (def.builtin) {
+      case 'tetra':
+        geo = new THREE.TetrahedronGeometry(def.R);
+        break;
+      case 'box':
+        geo = new THREE.BoxGeometry(def.half * 2, def.half * 2, def.half * 2);
+        break;
+      case 'octa':
+        geo = new THREE.OctahedronGeometry(def.R);
+        break;
+      case 'icosa':
+        geo = new THREE.IcosahedronGeometry(def.R);
+        break;
+      case 'dodeca':
+        geo = new THREE.DodecahedronGeometry(def.R);
+        break;
+      case 'custom':
+        geo = def.customGeometry;
+        break;
+      default:
+        throw new Error('no geometry for ' + def.builtin);
+    }
+    geometryCache.set(def.type, geo);
+    return geo;
+  }
+
+  function buildDieMesh(def) {
+    const geo = getBodyGeometry(def);
+    const mesh = new THREE.Mesh(geo, acrylicMaterial);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const labelDist = def.isVertexBased ? 1 : 1;
+    def.labelSpots.forEach((spot) => {
+      const size = spot.size;
+      const plane = new THREE.PlaneGeometry(size, size);
+      const label = new THREE.Mesh(plane, getLabelMaterial(spot.label));
+      label.renderOrder = 2;
+      const lift = def.R * 0.025;
+      label.position.set(
+        spot.pos[0] + spot.normal[0] * lift,
+        spot.pos[1] + spot.normal[1] * lift,
+        spot.pos[2] + spot.normal[2] * lift,
+      );
+      label.quaternion.copy(quaternionForNormal(spot.normal, spot.up));
+      label.castShadow = false;
+      label.receiveShadow = false;
+      mesh.add(label);
+    });
+    return mesh;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Scene setup                                                             */
+  /* ---------------------------------------------------------------------- */
+
+  const canvas = document.getElementById('scene-canvas');
+  const trayEl = document.getElementById('dice-zone');
+  const dockEl = trayEl.querySelector('.dock');
+  const traySize = () => ({ w: Math.max(trayEl.clientWidth, 1), h: Math.max(trayEl.clientHeight, 1) });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(traySize().w, traySize().h, false);
+  renderer.setClearAlpha(0);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Two camera passes per frame (main view + dice-view inset) share one shadow
+  // map, refreshed once per frame instead of once per render call.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.92;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.045).texture;
+
+  const camera = new THREE.PerspectiveCamera(42, traySize().w / traySize().h, 0.1, 100);
+  // Locked plan view. The camera looks straight down, so `up` has to point along
+  // -Z or the look-at direction would be parallel to it and the basis collapses.
+  camera.up.set(0, 0, -1);
+
+  /* ------------------------------------------------------------------------ */
+  /* Camera rig — top-down only, scroll to zoom                                */
+  /* ------------------------------------------------------------------------ */
+  /* No orbit, no pan, no drag. The tray layout can never be skewed by the     */
+  /* host; the only camera freedom is a wheel zoom toward the dice, and any     */
+  /* roll eases the view back out to the full plan view.                       */
+
+  const TRAY_FOCUS_Y = 0.2;              // the plane the camera frames
+  const ZOOM_MIN_SCALE = 0.34;           // closest approach, as a share of the fit height
+  const ZOOM_STEP = 0.16;                // per wheel notch
+  const ZOOM_EASE = 7.5;                 // responsive under the wheel
+  const ZOOM_RESET_EASE = 2.6;           // slower, so a roll drifts back out gently
+  const FOCUS_EASE = 5.0;
+  let easeRate = ZOOM_EASE;
+
+  let fitHeight = 12;                    // set by fitTray()
+  let zoom = 0;                          // 0 = full plan view, 1 = closest
+  let zoomTarget = 0;
+
+  // FRAME_CZ is the z the plan view centres on. Screen-up is -Z under this camera
+  // basis, so a smaller FRAME_CZ moves the felt down the screen. FRAME_HZ is the
+  // half-extent a zoomed-in camera may pan across, measured from FRAME_CZ.
+  let FRAME_HZ = OUT_HZ + BOTTOM_PAD / 2;
+  let FRAME_CZ = BOTTOM_PAD / 2;
+
+  const focus = new THREE.Vector3(0, TRAY_FOCUS_Y, FRAME_CZ);  // smoothed look-at
+  const focusTarget = new THREE.Vector3(0, TRAY_FOCUS_Y, FRAME_CZ);
+
+  // Where the dice actually are, so a zoom closes in on them and not on empty felt.
+  function diceCentroid(out) {
+    let n = 0;
+    out.set(0, 0, 0);
+    for (const d of activeDice) {
+      if (!d || !d.mesh) continue;
+      out.x += d.mesh.position.x;
+      out.z += d.mesh.position.z;
+      n++;
+    }
+    if (n === 0) { out.set(0, TRAY_FOCUS_Y, FRAME_CZ); return out; }
+    out.x /= n; out.z /= n; out.y = TRAY_FOCUS_Y;
+    return out;
+  }
+
+  const _c = new THREE.Vector3();
+  function applyCamera(delta) {
+    // Ease the zoom, then the point being framed.
+    const kz = 1 - Math.exp(-easeRate * delta);
+    const kf = 1 - Math.exp(-FOCUS_EASE * delta);
+    zoom += (zoomTarget - zoom) * kz;
+    if (Math.abs(zoomTarget - zoom) < 0.0004) zoom = zoomTarget;
+
+    diceCentroid(_c);
+    // Fully zoomed out always centres the framed rectangle; zoomed in follows the dice.
+    focusTarget.set(_c.x * zoom, TRAY_FOCUS_Y, FRAME_CZ + (_c.z - FRAME_CZ) * zoom);
+    focus.lerp(focusTarget, kf);
+
+    const height = fitHeight * (1 - zoom * (1 - ZOOM_MIN_SCALE));
+    const vHalf = Math.tan((camera.fov * Math.PI) / 360) * height;
+    const hHalf = vHalf * camera.aspect;
+
+    // Never let the frame slide off the tray (plus its bottom margin).
+    const limX = Math.max(0, OUT_HX - hHalf);
+    const limZ = Math.max(0, FRAME_HZ - vHalf);
+    const cx = Math.max(-limX, Math.min(limX, focus.x));
+    const dz = focus.z - FRAME_CZ;
+    const cz = FRAME_CZ + Math.max(-limZ, Math.min(limZ, dz));
+
+    camera.position.set(cx, TRAY_FOCUS_Y + height, cz);
+    camera.lookAt(cx, TRAY_FOCUS_Y, cz);
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Dice view — a square inset that stays close on the dice                    */
+  /* ------------------------------------------------------------------------ */
+  /* Rendered as a second pass of the same scene into the pixels occupied by the */
+  /* .dice-cam panel, using a scissor rectangle. Same plan-view basis, but the   */
+  /* height adapts so every die in play is framed.                              */
+
+  const camPanel = document.getElementById('dice-cam');
+  const diceCam = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  diceCam.up.set(0, 0, -1);
+  const DICE_CAM_TAN = Math.tan((38 * Math.PI) / 360);
+  const DICE_CAM_HALF_MIN = 0.85;   // world half-extent when a single die is in play
+  const DICE_CAM_HALF_MAX = 4.4;    // never zooms out past this
+  const DICE_CAM_EASE = 6.0;
+
+  const dcFocus = new THREE.Vector3(0, TRAY_FOCUS_Y, 0);
+  let dcHalf = DICE_CAM_HALF_MIN;
+  const _dc = new THREE.Vector3();
+
+  function applyDiceCam(delta) {
+    diceCentroid(_dc);
+    if (!activeDice.length) { _dc.set(0, TRAY_FOCUS_Y, 0); }
+
+    // Widen just enough to hold every die, plus a margin.
+    let spread = 0;
+    for (const d of activeDice) {
+      if (!d || !d.mesh) continue;
+      spread = Math.max(spread, Math.abs(d.mesh.position.x - _dc.x), Math.abs(d.mesh.position.z - _dc.z));
+    }
+    // spread is centre-to-centre, so add a die radius plus a little breathing room.
+    const wantHalf = Math.max(DICE_CAM_HALF_MIN, Math.min(DICE_CAM_HALF_MAX, spread + DIE_RADIUS + 0.18));
+
+    const k = 1 - Math.exp(-DICE_CAM_EASE * delta);
+    dcFocus.lerp(_dc, k);
+    dcHalf += (wantHalf - dcHalf) * k;
+
+    // Keep the inset looking at felt rather than off the edge of the tray.
+    const limX = Math.max(0, OUT_HX - dcHalf);
+    const limZ = Math.max(0, OUT_HZ - dcHalf);
+    const cx = Math.max(-limX, Math.min(limX, dcFocus.x));
+    const cz = Math.max(-limZ, Math.min(limZ, dcFocus.z));
+    diceCam.position.set(cx, TRAY_FOCUS_Y + dcHalf / DICE_CAM_TAN, cz);
+    diceCam.lookAt(cx, TRAY_FOCUS_Y, cz);
+  }
+
+  // Pixel rectangle of the panel in the canvas's own space, y measured from the
+  // bottom as WebGL viewports are. Layout reads are throttled by the caller.
+  let insetRect = null;
+  function measureInset() {
+    if (!camPanel) { insetRect = null; return; }
+    const c = renderer.domElement.getBoundingClientRect();
+    const r = camPanel.getBoundingClientRect();
+    const w = Math.round(r.width);
+    const hh = Math.round(r.height);
+    if (w < 32 || hh < 32 || c.width < 1) { insetRect = null; return; }
+    insetRect = {
+      x: Math.round(r.left - c.left),
+      y: Math.round(c.bottom - r.bottom),
+      w: w,
+      h: hh,
+    };
+  }
+
+  // Wheel zoom. Trackpads report small deltas, mice report large ones, so the
+  // notch is normalised rather than scaled by the raw value.
+  renderer.domElement.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const dir = e.deltaY < 0 ? 1 : -1;
+    const scale = e.deltaMode === 1 ? 1 : Math.min(1, Math.abs(e.deltaY) / 60) || 1;
+    easeRate = ZOOM_EASE;
+    zoomTarget = Math.max(0, Math.min(1, zoomTarget + dir * ZOOM_STEP * scale));
+  }, { passive: false });
+
+  // Pinch to zoom, for anyone hosting from a tablet.
+  let pinchStart = 0, pinchZoom = 0;
+  const pinchSpan = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  renderer.domElement.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) { pinchStart = pinchSpan(e.touches); pinchZoom = zoomTarget; }
+  }, { passive: true });
+  renderer.domElement.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 2 || !pinchStart) return;
+    e.preventDefault();
+    const ratio = pinchSpan(e.touches) / pinchStart;
+    easeRate = ZOOM_EASE;
+    zoomTarget = Math.max(0, Math.min(1, pinchZoom + (ratio - 1) * 0.9));
+  }, { passive: false });
+  renderer.domElement.addEventListener('touchend', () => { pinchStart = 0; }, { passive: true });
+
+  // Called on every roll: ease back out to the clean plan view.
+  function resetView() { easeRate = ZOOM_RESET_EASE; zoomTarget = 0; }
+
+  /* Lighting -----------------------------------------------------------------
+     The camera is locked straight down, so any light near the vertical mirrors
+     its specular hotspot straight back into the lens and washes the numbers out.
+     Every light here sits low (25-35 degrees of elevation) and off-axis, which
+     puts each specular lobe roughly 30 degrees off the top-face normal — well
+     clear of the read face. Diffuse brightness lost to the lower key is paid
+     back by the hemisphere light, which produces no hotspot at all.            */
+
+  const hemi = new THREE.HemisphereLight(0xbfffe0, 0x03150c, 0.66);
+  scene.add(hemi);
+
+  const keyLight = new THREE.DirectionalLight(0xfff4e0, 1.24);
+  keyLight.position.set(7.6, 5.0, -3.4);   // ~32 deg elevation, off to the upper right
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(2048, 1536);
+  keyLight.shadow.camera.near = 1;
+  keyLight.shadow.camera.far = 30;
+  keyLight.shadow.camera.left = -10;
+  keyLight.shadow.camera.right = 10;
+  keyLight.shadow.camera.top = 10;
+  keyLight.shadow.camera.bottom = -10;
+  keyLight.shadow.bias = -0.0015;
+  scene.add(keyLight);
+
+  // Opposing low fill, so faces turned away from the key are still readable.
+  const sideFill = new THREE.DirectionalLight(0xdff5e6, 0.44);
+  sideFill.position.set(-4.4, 4.4, 6.0);
+  scene.add(sideFill);
+
+  const rimLight = new THREE.DirectionalLight(0x30ffaa, 0.42);
+  rimLight.position.set(-7.4, 3.2, -4.6);
+  scene.add(rimLight);
+
+  const fillLight = new THREE.PointLight(0x1fe36a, 0.3, 22, 2);
+  fillLight.position.set(0, 2.4, -6.2);
+  scene.add(fillLight);
+
+  /* ---------------------------------------------------------------------- */
+  /* Tray                                                                     */
+  /* ---------------------------------------------------------------------- */
+
+  function drawFiberNoise(ctx, x0, y0, w, h, count, baseShade, alpha) {
+    for (let i = 0; i < count; i++) {
+      const x = x0 + Math.random() * w;
+      const y = y0 + Math.random() * h;
+      const shade = Math.random() * baseShade.spread - baseShade.spread / 2;
+      ctx.fillStyle = `rgba(${baseShade.r + shade},${baseShade.g + shade},${baseShade.b + shade},${alpha})`;
+      ctx.fillRect(x, y, 1.3, 1.7);
+    }
+  }
+
+  function feltTexture() {
+    // Single non-tiled canvas covering the whole tray floor, so the inlaid
+    // emblem appears once, centered — not repeated by texture tiling.
+    // Canvas matches the tray's footprint aspect so nothing on the felt (least of
+    // all the emblem) is stretched by the wide, shallow floor.
+    const s = 1280;
+    const sz = Math.round(s * (TRAY_HZ / TRAY_HX));
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = s;
+    canvasEl.height = sz;
+    const ctx = canvasEl.getContext('2d');
+
+    // Base felt fill — deep emerald cloth.
+    ctx.fillStyle = '#0d2419';
+    ctx.fillRect(0, 0, s, sz);
+
+    // Woven fiber grain, at the same fleck density per unit area as before.
+    const density = (s * sz) / (1024 * 1024);
+    drawFiberNoise(ctx, 0, 0, s, sz, Math.round(36000 * density), { r: 18, g: 52, b: 34, spread: 18 }, 0.5);
+    // A second, sparser pass of slightly warmer/cooler flecks adds depth.
+    drawFiberNoise(ctx, 0, 0, s, sz, Math.round(6000 * density), { r: 10, g: 40, b: 26, spread: 14 }, 0.35);
+
+    // Subtle center vignette so the emblem area reads slightly richer/darker,
+    // like light catching worn felt around a stitched centerpiece.
+    const vignette = ctx.createRadialGradient(s / 2, sz / 2, sz * 0.14, s / 2, sz / 2, sz * 0.9);
+    vignette.addColorStop(0, 'rgba(0,0,0,0.12)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, s, sz);
+
+    // --- Epicism infinity emblem, inlaid centered on the felt ---
+    const logoWidth = s * 0.34;
+    const scale = logoWidth / INFINITY_VIEWBOX.w;
+    const logoHeight = INFINITY_VIEWBOX.h * scale;
+    const cx = s / 2 - logoWidth / 2;
+    const cy = sz / 2 - logoHeight / 2;
+    const mark = new Path2D(INFINITY_PATH_D);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+
+    // Recessed emboss: dark shadow offset down-right (stitched groove)...
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 10 / scale;
+    ctx.shadowOffsetX = 3 / scale;
+    ctx.shadowOffsetY = 4 / scale;
+    ctx.fillStyle = 'rgba(0,0,0,0.001)'; // near-invisible fill, only the shadow shows
+    ctx.fill(mark);
+    ctx.restore();
+
+    // ...and a faint highlight offset up-left (rim light), for a stitched-inlay feel.
+    ctx.save();
+    ctx.shadowColor = 'rgba(180,255,220,0.35)';
+    ctx.shadowBlur = 6 / scale;
+    ctx.shadowOffsetX = -2 / scale;
+    ctx.shadowOffsetY = -2 / scale;
+    ctx.fillStyle = 'rgba(0,0,0,0.001)';
+    ctx.fill(mark);
+    ctx.restore();
+
+    // Solid white thread fill on top.
+    ctx.fillStyle = '#f4f7f5';
+    ctx.fill(mark);
+
+    // Fine fiber texture inside the emblem itself, clipped to its shape, so it
+    // reads as embroidered/inlaid fabric rather than a flat printed decal.
+    ctx.save();
+    ctx.clip(mark);
+    drawFiberNoise(ctx, 0, 0, INFINITY_VIEWBOX.w, INFINITY_VIEWBOX.h, 1800, { r: 210, g: 220, b: 214, spread: 30 }, 0.4);
+    ctx.restore();
+
+    ctx.restore();
+
+    const tex = new THREE.CanvasTexture(canvasEl);
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(1, 1);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  const floorGeo = new THREE.BoxGeometry(TRAY_HX * 2, 0.2, TRAY_HZ * 2);
+  const floorMat = new THREE.MeshStandardMaterial({ map: feltTexture(), roughness: 0.97, metalness: 0 });
+  const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+  floorMesh.position.y = -0.1;
+  floorMesh.receiveShadow = true;
+  scene.add(floorMesh);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x0b1c14, roughness: 0.75, metalness: 0.08 });
+  const trimMat = new THREE.MeshStandardMaterial({
+    color: GREEN_HEX,
+    emissive: GREEN_HEX,
+    emissiveIntensity: 0.9,
+    roughness: 0.4,
+  });
+
+  // Rounded-rect path helper (footprint in the shape's local XY plane, centered at origin)
+  function roundedRectPath(hx, hz, r) {
+    const rr = Math.min(r, hx - 0.001, hz - 0.001);
+    const p = new THREE.Path();
+    p.moveTo(-hx + rr, -hz);
+    p.lineTo(hx - rr, -hz);
+    p.absarc(hx - rr, -hz + rr, rr, -Math.PI / 2, 0, false);
+    p.lineTo(hx, hz - rr);
+    p.absarc(hx - rr, hz - rr, rr, 0, Math.PI / 2, false);
+    p.lineTo(-hx + rr, hz);
+    p.absarc(-hx + rr, hz - rr, rr, Math.PI / 2, Math.PI, false);
+    p.lineTo(-hx, -hz + rr);
+    p.absarc(-hx + rr, -hz + rr, rr, Math.PI, Math.PI * 1.5, false);
+    return p;
+  }
+
+  const OUTER_RADIUS = 0.55;
+  const INNER_RADIUS = Math.max(OUTER_RADIUS - WALL_T, 0.08);
+
+  // Single seamless frame mesh (outer rounded rect minus inner rounded rect), extruded
+  // upward with a soft bevel — replaces the old 4 overlapping boxes so corners no longer
+  // look blocky/clipped.
+  const frameShape = new THREE.Shape();
+  {
+    const outer = roundedRectPath(OUT_HX, OUT_HZ, OUTER_RADIUS);
+    frameShape.curves = outer.curves;
+  }
+  const frameHole = roundedRectPath(TRAY_HX, TRAY_HZ, INNER_RADIUS);
+  frameShape.holes.push(frameHole);
+
+  const frameGeo = new THREE.ExtrudeGeometry(frameShape, {
+    depth: WALL_H,
+    bevelEnabled: true,
+    bevelThickness: 0.05,
+    bevelSize: 0.045,
+    bevelSegments: 6,
+    curveSegments: 20,
+  });
+  const frameMesh = new THREE.Mesh(frameGeo, wallMat);
+  frameMesh.rotation.x = -Math.PI / 2;
+  frameMesh.position.y = 0;
+  frameMesh.castShadow = true;
+  frameMesh.receiveShadow = true;
+  scene.add(frameMesh);
+
+  // Thin glowing trim ring following the smooth inner edge of the tray, flush with the wall top
+  const trimOuterR = INNER_RADIUS + 0.05;
+  const trimShape = new THREE.Shape();
+  {
+    const outer = roundedRectPath(TRAY_HX + 0.06, TRAY_HZ + 0.06, trimOuterR);
+    trimShape.curves = outer.curves;
+  }
+  const trimHole = roundedRectPath(TRAY_HX, TRAY_HZ, INNER_RADIUS);
+  trimShape.holes.push(trimHole);
+  const trimGeo = new THREE.ShapeGeometry(trimShape, 20);
+  const trimMesh = new THREE.Mesh(trimGeo, trimMat);
+  trimMesh.rotation.x = -Math.PI / 2;
+  trimMesh.position.y = WALL_H - 0.015;
+  scene.add(trimMesh);
+
+
+
+  /* ---------------------------------------------------------------------- */
+  /* Physics world (Rapier)                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  await RAPIER.init();
+  const world = new RAPIER.World({ x: 0, y: -15.5, z: 0 });
+
+  function addStaticCuboid(cx, cy, cz, hx, hy, hz) {
+    const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(cx, cy, cz);
+    const body = world.createRigidBody(desc);
+    const colDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz).setFriction(0.85).setRestitution(0.25);
+    world.createCollider(colDesc, body);
+    return body;
+  }
+
+  // The collision walls run well above the visible rail. A shallower tray means
+  // more wall hits, and an invisible upper section guarantees a hot die can never
+  // hop out. The inner faces stay flush with the visible wall, so there is no
+  // ledge for a die to rest on.
+  const WALL_PHYS_H = WALL_H * 2.8;
+  addStaticCuboid(0, -0.1, 0, TRAY_HX, 0.1, TRAY_HZ);
+  addStaticCuboid(OUT_HX, WALL_PHYS_H / 2, 0, WALL_T, WALL_PHYS_H / 2, OUT_HZ);
+  addStaticCuboid(-OUT_HX, WALL_PHYS_H / 2, 0, WALL_T, WALL_PHYS_H / 2, OUT_HZ);
+  addStaticCuboid(0, WALL_PHYS_H / 2, OUT_HZ, OUT_HX, WALL_PHYS_H / 2, WALL_T);
+  addStaticCuboid(0, WALL_PHYS_H / 2, -OUT_HZ, OUT_HX, WALL_PHYS_H / 2, WALL_T);
+
+  /* ---------------------------------------------------------------------- */
+  /* Dice management                                                         */
+  /* ---------------------------------------------------------------------- */
+
+  let activeDice = []; // { mesh, body, def, settled, quiet, spawnedAt, result }
+  let rollState = 'idle'; // 'idle' | 'rolling' | 'settled'
+  let currentType = 'D6';
+  let diceCount = 1;
+  const rollHistory = [];
+
+  function clearDice() {
+    activeDice.forEach((d) => {
+      scene.remove(d.mesh);
+      world.removeRigidBody(d.body);
+    });
+    activeDice = [];
+  }
+
+  function spawnDice(type, count) {
+    clearDice();
+    const def = DIE_DEFS[type];
+    const now = performance.now();
+    for (let i = 0; i < count; i++) {
+      const mesh = buildDieMesh(def);
+      scene.add(mesh);
+
+      // Spread the release across the wide axis and drop slightly above centre, so
+      // dice tumble sideways rather than piling toward the bottom rail.
+      const gridX = (i - (count - 1) / 2) * 1.5;
+      const px = gridX + (Math.random() - 0.5) * 0.5;
+      const py = 3.6 + Math.random() * 1.4 + i * 0.15;
+      const pz = -0.5 + (Math.random() - 0.5) * 0.9;
+
+      const startQuat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2),
+      );
+
+      const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(px, py, pz)
+        .setRotation({ x: startQuat.x, y: startQuat.y, z: startQuat.z, w: startQuat.w })
+        .setLinvel((Math.random() - 0.5) * 5.2, -1.5 - Math.random() * 1.5, (Math.random() - 0.5) * 2.6)
+        .setAngvel({
+          x: (Math.random() - 0.5) * 22,
+          y: (Math.random() - 0.5) * 22,
+          z: (Math.random() - 0.5) * 22,
+        })
+        .setCcdEnabled(true)
+        .setLinearDamping(0.02)
+        .setAngularDamping(0.06);
+
+      const body = world.createRigidBody(bodyDesc);
+
+      let colDesc;
+      if (def.builtin === 'box') {
+        colDesc = RAPIER.ColliderDesc.cuboid(def.half, def.half, def.half);
+      } else {
+        colDesc = RAPIER.ColliderDesc.convexHull(def.hullPoints);
+      }
+      colDesc.setFriction(0.55).setRestitution(0.32).setDensity(1.4);
+      world.createCollider(colDesc, body);
+
+      activeDice.push({
+        mesh,
+        body,
+        def,
+        settled: false,
+        quiet: 0,
+        spawnedAt: now,
+        result: null,
+        displayFlicker: Math.ceil(Math.random() * FACE_COUNT[type]),
+      });
+    }
+    rollState = 'rolling';
+  }
+
+  function computeResult(die) {
+    const q = die.mesh.quaternion;
+    const def = die.def;
+    let best = -Infinity;
+    const initialSpots = def.isVertexBased ? def.vertexSpots : def.labelSpots;
+    let bestLabel = initialSpots ? initialSpots[0].label : 1;
+    if (def.isVertexBased) {
+      def.vertexSpots.forEach((spot) => {
+        const dir = new THREE.Vector3(...spot.normal).applyQuaternion(q);
+        if (dir.y > best) {
+          best = dir.y;
+          bestLabel = spot.label;
+        }
+      });
+    } else {
+      def.labelSpots.forEach((spot) => {
+        const dir = new THREE.Vector3(...spot.normal).applyQuaternion(q);
+        if (dir.y > best) {
+          best = dir.y;
+          bestLabel = spot.label;
+        }
+      });
+    }
+    return bestLabel;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* UI                                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  /* ---------------------------------------------------------------------- */
+  /* Bridge to the Elysian Trail table UI                                    */
+  /* ---------------------------------------------------------------------- */
+
+  const UI = window.DiceUI;
+
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function playTone(freq, duration, type, gainVal) {
+    if (!UI.soundOn || !audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+  const playRollSound = () => playTone(180, 0.12, 'square', 0.08);
+  function playSettleSound() {
+    playTone(660, 0.16, 'sine', 0.1);
+    setTimeout(() => playTone(880, 0.14, 'sine', 0.07), 70);
+  }
+  window.addEventListener('pointerdown', ensureAudio, { once: true });
+  window.addEventListener('keydown', ensureAudio, { once: true });
+
+  function finalizeRoll() {
+    const results = activeDice.map((d) => (d.result == null ? 1 : d.result));
+    rollState = 'settled';
+    UI.finalize(results, currentType);
+    playSettleSound();
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Debug overlay                                                           */
+  /* ---------------------------------------------------------------------- */
+
+  const DEBUG_OVERLAY_ENABLED = new URLSearchParams(location.search).has('debug');
+  const debugEl = document.createElement('div');
+  debugEl.id = 'debug-overlay';
+  if (!DEBUG_OVERLAY_ENABLED) debugEl.style.display = 'none';
+  document.body.appendChild(debugEl);
+  let dbgFrames = 0;
+  let dbgLast = performance.now();
+  let dbgFrameTimes = [];
+  let dbgLastFrame = performance.now();
+  function updateDebug() {
+    const now = performance.now();
+    dbgFrameTimes.push(now - dbgLastFrame);
+    dbgLastFrame = now;
+    dbgFrames++;
+    if (now - dbgLast >= 1000) {
+      const fps = (dbgFrames * 1000) / (now - dbgLast);
+      const avg = dbgFrameTimes.reduce((a, b) => a + b, 0) / dbgFrameTimes.length;
+      const info = renderer.info;
+      const lines = [
+        `FPS:${fps.toFixed(0)} Frame:${avg.toFixed(1)}ms`,
+        `Draw:${info.render.calls} Tri:${info.render.triangles} Dice:${activeDice.length}`,
+      ];
+      debugEl.textContent = lines.join('\n');
+      dbgFrames = 0;
+      dbgLast = now;
+      dbgFrameTimes = [];
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Fixed-timestep physics + render loop                                    */
+  /* ---------------------------------------------------------------------- */
+
+  const clock = new THREE.Clock();
+  let accumulator = 0;
+
+  function stepPhysics(dt) {
+    world.step();
+    const now = performance.now();
+    let allSettled = true;
+    activeDice.forEach((die) => {
+      const pos = die.body.translation();
+      const rot = die.body.rotation();
+      die.mesh.position.set(pos.x, pos.y, pos.z);
+      die.mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
+
+      if (!die.settled) {
+        const lv = die.body.linvel();
+        const av = die.body.angvel();
+        const speed = Math.hypot(lv.x, lv.y, lv.z);
+        const angSpeed = Math.hypot(av.x, av.y, av.z);
+        const quiet = speed < LIN_SLEEP_THRESH && angSpeed < ANG_SLEEP_THRESH;
+        die.quiet = quiet ? die.quiet + dt : 0;
+        const timedOut = now - die.spawnedAt > HARD_TIMEOUT_MS;
+        if (die.quiet >= SETTLE_QUIET_TIME || die.body.isSleeping() || timedOut) {
+          die.settled = true;
+          die.result = computeResult(die);
+        } else {
+          allSettled = false;
+          if (now - die.spawnedAt < 900) {
+            die.displayFlicker = 1 + Math.floor(Math.random() * FACE_COUNT[die.def.type]);
+          }
+        }
+      }
+    });
+
+    if (rollState === 'rolling') {
+      if (activeDice.length > 0 && allSettled) {
+        finalizeRoll();
+      } else {
+        UI.flicker(activeDice.reduce((a, d) => a + (d.settled ? d.result : d.displayFlicker), 0));
+      }
+    }
+  }
+
+  function updatePhysicsLoop(delta) {
+    accumulator += delta;
+    const maxSteps = 6;
+    let steps = 0;
+    while (accumulator >= FIXED_TIMESTEP && steps < maxSteps) {
+      stepPhysics(FIXED_TIMESTEP);
+      accumulator -= FIXED_TIMESTEP;
+      steps++;
+    }
+  }
+
+  let insetTick = 0;
+  function render(delta = 1 / 60) {
+    applyCamera(delta);
+    applyDiceCam(delta);
+
+    const { w, h } = traySize();
+    renderer.shadowMap.needsUpdate = true;
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+    renderer.render(scene, camera);
+
+    // The panel only moves when the layout changes, so re-measure occasionally
+    // rather than forcing a layout read every frame.
+    if (insetTick-- <= 0) { measureInset(); insetTick = 20; }
+    if (insetRect) {
+      const r = insetRect;
+      diceCam.aspect = r.w / r.h;
+      diceCam.updateProjectionMatrix();
+      renderer.setViewport(r.x, r.y, r.w, r.h);
+      renderer.setScissor(r.x, r.y, r.w, r.h);
+      renderer.setScissorTest(true);
+      renderer.render(scene, diceCam);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, w, h);
+    }
+    updateDebug();
+  }
+
+  let rafId = null;
+  function animate() {
+    rafId = requestAnimationFrame(animate);
+    const delta = Math.min(clock.getDelta(), 0.1);
+    updatePhysicsLoop(delta);
+    render(delta);
+  }
+
+  // deterministic test hook
+  window.advanceTime = (ms) => {
+    const steps = Math.max(1, Math.round(ms / (1000 / 60)));
+    for (let i = 0; i < steps; i++) stepPhysics(FIXED_TIMESTEP);
+    render();
+  };
+
+  window.__debugSamplePixel = (wx, wy, wz) => {
+    const v = new THREE.Vector3(wx, wy, wz).project(camera);
+    const sx = Math.round(((v.x + 1) / 2) * canvas.width);
+    const sy = Math.round(((1 - v.y) / 2) * canvas.height);
+    const gl = renderer.getContext();
+    const glY = canvas.height - sy; // gl origin bottom-left
+    const buf = new Uint8Array(4);
+    gl.readPixels(sx, glY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    return { screen: [sx, sy], rgba: Array.from(buf) };
+  };
+
+  window.__debugProject = (wx, wy, wz) => {
+    const v = new THREE.Vector3(wx, wy, wz).project(camera);
+    const sx = Math.round(((v.x + 1) / 2) * canvas.width);
+    const sy = Math.round(((1 - v.y) / 2) * canvas.height);
+    return [sx, sy];
+  };
+
+  window.__debugFloorTexture = () => floorMat.map.image.toDataURL();
+
+  window.__debugLabelTexture = (n) => {
+    const tex = labelTextureCache.get(n);
+    return tex ? tex.image.toDataURL() : null;
+  };
+
+  window.__debugCamera = (x, y, z, tx, ty, tz) => {
+    camera.position.set(x, y, z);
+    camera.lookAt(tx ?? 0, ty ?? 0, tz ?? 0);
+    renderer.render(scene, camera);
+  };
+
+  window.__debugDice = () => activeDice.map((d) => ({
+    bodyPos: d.body.translation(),
+    bodyRot: d.body.rotation(),
+    linvel: d.body.linvel(),
+    angvel: d.body.angvel(),
+  }));
+
+  window.render_game_to_text = () => {
+    return JSON.stringify({
+      rollState,
+      dieType: currentType,
+      diceCount,
+      dice: activeDice.map((d) => ({
+        settled: d.settled,
+        result: d.result,
+        displayFlicker: d.displayFlicker,
+        pos: d.mesh.position.toArray().map((v) => +v.toFixed(2)),
+      })),
+      history: rollHistory,
+    });
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Resize                                                                   */
+  /* ---------------------------------------------------------------------- */
+
+  function fitTray() {
+    const { w, h } = traySize();
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+
+    // Reserve a band of framed backdrop as tall as the control dock, so a die that
+    // settles against the bottom rail is never hidden behind the controls. Solving
+    // pad = f * (2*OUT_HZ + pad) for the dock's share f of the viewport height.
+    const dockH = dockEl ? dockEl.offsetHeight : 62;
+    const f = Math.min(0.34, (dockH + 12) / h);
+    BOTTOM_PAD = Math.max(0.6, Math.min(3.2, (f * 2 * OUT_HZ) / (1 - f)));
+
+    // Height at which the whole tray, plus that bottom band, fits in a plan view.
+    const tan = Math.tan((camera.fov * Math.PI) / 360);
+    const hFitV = (OUT_HZ + BOTTOM_PAD / 2) / tan;     // constrained by frame height
+    const hFitH = OUT_HX / (tan * camera.aspect);      // constrained by frame width
+    fitHeight = Math.max(hFitV, hFitH) * 1.04;
+
+    // Nudge the whole view down the screen by VIEW_SHIFT_PX, converted to world
+    // units at the plan-view height.
+    const vHalf = tan * fitHeight;
+    const shift = (VIEW_SHIFT_PX * 2 * vHalf) / h;
+    FRAME_CZ = BOTTOM_PAD / 2 - shift;
+    FRAME_HZ = OUT_HZ + Math.abs(FRAME_CZ);
+
+    focus.z = FRAME_CZ;
+    focusTarget.z = FRAME_CZ;
+    applyCamera(10);  // snap, no easing, on a resize
+  }
+  if (window.ResizeObserver) new ResizeObserver(() => fitTray()).observe(trayEl);
+  window.addEventListener('resize', fitTray);
+
+  /* ---------------------------------------------------------------------- */
+  /* Boot                                                                     */
+  /* ---------------------------------------------------------------------- */
+
+  fitTray();
+  UI.attach({
+    roll(type, count) {
+      currentType = type;
+      diceCount = count;
+      resetView();          // ease back to the clean plan view on every roll
+      ensureAudio();
+      playRollSound();
+      spawnDice(type, count);
+    },
+    clear() {
+      clearDice();
+      resetView();
+      rollState = 'idle';
+    },
+  });
+  animate();
+
+} catch (err) {
+  window.DiceUI.failEngine(err);
+}
+})();
+</script>
+</body>
+</html>
